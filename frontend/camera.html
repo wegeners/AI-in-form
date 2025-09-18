@@ -4,31 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>Kamera — Bürgerchat Demo</title>
-<style>
-  :root{--bav-royal:#00308F;--muted:#415069;--bg:#f7fbff}
-  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--muted);font-size:14px}
-  .wrap{max-width:900px;margin:18px auto;padding:12px}
-  header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-  h1{margin:0;font-size:18px;color:var(--bav-royal)}
-  .ui{display:grid;grid-template-columns:1fr 320px;gap:12px}
-  .panel{background:#fff;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-  video{width:100%;height:auto;border-radius:8px;background:#000;display:block}
-  canvas{width:100%;height:auto;border-radius:8px;background:#eee;display:none}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  button{background:var(--bav-royal);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
-  button.secondary{background:transparent;border:1px solid rgba(0,0,0,0.06);color:var(--muted)}
-  .small{font-size:13px;padding:6px 8px}
-  .preview{display:flex;flex-direction:column;gap:8px}
-  .meta{font-size:13px;color:#6b7280}
-  .status{font-size:13px;color:#0b2440}
-  .error{color:#9b1c1c}
-  img#thumb{width:100%;border-radius:8px;display:none}
-  .spinner{width:16px;height:16px;border-radius:50%;border:3px solid rgba(0,0,0,0.12);border-top-color:var(--bav-royal);animation:spin 1s linear infinite;display:inline-block;vertical-align:middle}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  @media (max-width:880px){ .ui{grid-template-columns:1fr; } .rightCol{order:2} }
-  .file-input{display:inline-block}
-  input[type=file]{display:none}
-</style>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <div class="wrap">
@@ -45,17 +21,17 @@
 
       <div class="controls" aria-hidden="false">
         <button id="takeBtn" class="small">Foto aufnehmen</button>
-
-        <!-- file input triggers native camera on iOS/Android -->
         <label id="fileLabel" class="small secondary file-input" title="Native Kamera">
           Native Kamera
           <input id="fileInput" accept="image/*" capture="environment" type="file" />
         </label>
-
         <button id="retakeBtn" class="small secondary" style="display:none">Neu</button>
         <button id="uploadBtn" class="small" style="display:none">Foto senden</button>
-
         <div id="busy" style="display:none;margin-left:8px"><span class="spinner" aria-hidden="true"></span></div>
+      </div>
+
+      <div id="questionBox">
+        <input id="questionInput" type="text" placeholder="Frage zum Foto hinzufügen..." maxlength="300" />
       </div>
 
       <div style="margin-top:8px" class="meta">Das Foto wird zusammen mit der ID aus der URL an die API gesendet.</div>
@@ -79,18 +55,14 @@
 </div>
 
 <script>
-/*
- camera.html — resized + grayscale + iterative compression to fit <= 950 KB
-*/
-
-const API_BASE = '/api/upload'; // change to your endpoint
+const API_BASE = '/api/upload';
 document.getElementById('apiBase').textContent = API_BASE;
 
-const MAX_BYTES = 950 * 1024; // 950 kB target limit
-const MAX_LONG_SIDE = 1600;   // max pixels on longest side (adjustable)
-const MIN_QUALITY = 0.45;     // don't go below this JPEG quality unless you want further reduction
-const START_QUALITY = 0.92;   // initial JPEG quality
-const QUALITY_STEP = 0.07;    // reduce by this step if size too big
+const MAX_BYTES = 950 * 1024;
+const MAX_LONG_SIDE = 1600;
+const MIN_QUALITY = 0.45;
+const START_QUALITY = 0.92;
+const QUALITY_STEP = 0.07;
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -104,6 +76,8 @@ const statusEl = document.getElementById('status');
 const apiStatus = document.getElementById('apiStatus');
 const busy = document.getElementById('busy');
 const errorEl = document.getElementById('error');
+const questionBox = document.getElementById('questionBox');
+const questionInput = document.getElementById('questionInput');
 
 let stream = null;
 let capturedBlob = null;
@@ -150,11 +124,18 @@ function stopStream(){
   }
 }
 
-// Resize + convert to grayscale + produce a compressed Blob under MAX_BYTES
+function renderQr(text){
+  qrCanvas.innerHTML = '';
+  const size = 220;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  qrCanvas.appendChild(canvas);
+  qrcodeGenerator(text, {canvas, size}); // <-- Add this line
+}
+
 async function processImageToBlob(imgOrBlob) {
-  // Load image into an offscreen Image
   const img = await loadImage(imgOrBlob);
-  // compute target dimensions preserving aspect ratio
   const {width: w0, height: h0} = img;
   let w = w0, h = h0;
   const long = Math.max(w0, h0);
@@ -163,38 +144,27 @@ async function processImageToBlob(imgOrBlob) {
     w = Math.round(w0 * scale);
     h = Math.round(h0 * scale);
   }
-
-  // draw onto canvas
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
-
-  // convert to grayscale to reduce entropy (good for text)
-  // use imageData manipulation
   try {
     const id = ctx.getImageData(0, 0, w, h);
     const data = id.data;
     for (let i = 0; i < data.length; i += 4) {
-      // luminance approximation (rec. 601)
       const lum = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
       data[i] = data[i+1] = data[i+2] = lum;
     }
     ctx.putImageData(id, 0, 0);
   } catch (e) {
-    // If cross-origin image prevents pixel access, fallback to drawn image without grayscale
     console.warn('Could not convert to grayscale (CORS?), proceeding without grayscale.', e);
   }
-
-  // iterative compression: start high quality then lower until under size or reach MIN_QUALITY
   let quality = START_QUALITY;
   let blob = await canvasToBlob(canvas, quality);
   while (blob.size > MAX_BYTES && quality > MIN_QUALITY) {
     quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP);
     blob = await canvasToBlob(canvas, quality);
   }
-
-  // If still too large, try a final pass: reduce resolution further in 85% steps
   if (blob.size > MAX_BYTES) {
     let curW = w, curH = h;
     while (blob.size > MAX_BYTES && (curW > 400 || curH > 400)) {
@@ -203,9 +173,7 @@ async function processImageToBlob(imgOrBlob) {
       canvas.width = curW;
       canvas.height = curH;
       const ctx2 = canvas.getContext('2d');
-      // draw from original image to this smaller canvas to preserve clarity for text
       ctx2.drawImage(img, 0, 0, curW, curH);
-      // grayscale again if possible
       try {
         const id2 = ctx2.getImageData(0, 0, curW, curH);
         const data2 = id2.data;
@@ -214,20 +182,13 @@ async function processImageToBlob(imgOrBlob) {
           data2[i] = data2[i+1] = data2[i+2] = lum;
         }
         ctx2.putImageData(id2, 0, 0);
-      } catch(e) { /* ignore */ }
-
-      // attempt with MIN_QUALITY
+      } catch(e) { }
       blob = await canvasToBlob(canvas, MIN_QUALITY);
     }
   }
-
-  // final check
   if (blob.size > MAX_BYTES) {
-    // still too big: return blob anyway but consumer should handle server rejection
     console.warn('Image still exceeds target size after aggressive reduction:', blob.size);
   }
-
-  // create DataURL for preview
   const dataUrl = await blobToDataURL(blob);
   return { blob, dataUrl };
 }
@@ -237,10 +198,8 @@ function loadImage(input) {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = e => reject(e);
-    // If input is a Blob/File, create object URL; if it's a data URL string, use directly
     if (input instanceof Blob) {
       img.src = URL.createObjectURL(input);
-      // revoke later after load
       img.addEventListener('load', () => URL.revokeObjectURL(img.src), {once:true});
     } else if (typeof input === 'string' && input.startsWith('data:')) {
       img.src = input;
@@ -267,7 +226,6 @@ function blobToDataURL(blob) {
   });
 }
 
-// Capture from video element (desktop/browser path)
 function captureFromPreview(){
   if(!stream){
     showError('Keine Live-Kamera verfügbar.');
@@ -275,14 +233,11 @@ function captureFromPreview(){
   }
   const w = video.videoWidth || 1280;
   const h = video.videoHeight || 720;
-  // draw directly from video to canvas, then process the canvas as image
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, w, h);
-  // get data URL and process it (treat as input)
-  const dataUrl = canvas.toDataURL('image/png'); // use PNG intermediate for lossless before our compression
-  // process intermediate dataUrl into final blob + preview
+  const dataUrl = canvas.toDataURL('image/png');
   setBusy(true);
   processImageToBlob(dataUrl).then(({blob, dataUrl: finalDataUrl})=>{
     setCaptured(blob, finalDataUrl);
@@ -291,7 +246,6 @@ function captureFromPreview(){
   }).finally(()=> setBusy(false));
 }
 
-// Handle file input (native camera on iOS/Android)
 fileInput.addEventListener('change', async (e) => {
   clearError();
   const file = e.target.files && e.target.files[0];
@@ -307,7 +261,6 @@ fileInput.addEventListener('change', async (e) => {
   }
 });
 
-// Buttons
 takeBtn.addEventListener('click', async () => {
   clearError();
   const isiOS = /iP(ad|hone|od)/.test(navigator.userAgent);
@@ -332,6 +285,8 @@ retakeBtn.addEventListener('click', () => {
   takeBtn.style.display = 'inline-block';
   retakeBtn.style.display = 'none';
   uploadBtn.style.display = 'none';
+  questionBox.style.display = 'none';
+  questionInput.value = '';
   info.textContent = 'Keine Aufnahme';
   apiStatus.textContent = 'Nicht gesendet';
   statusEl.textContent = 'Bereit';
@@ -339,7 +294,6 @@ retakeBtn.addEventListener('click', () => {
 
 uploadBtn.addEventListener('click', uploadPhoto);
 
-// set captured state
 function setCaptured(blob, dataUrl){
   capturedBlob = blob;
   capturedDataUrl = dataUrl;
@@ -350,12 +304,12 @@ function setCaptured(blob, dataUrl){
   takeBtn.style.display = 'none';
   retakeBtn.style.display = 'inline-block';
   uploadBtn.style.display = 'inline-block';
+  questionBox.style.display = 'block';
   info.textContent = 'Aufnahme bereit zum Senden ( Größe: ' + humanFileSize(blob.size) + ' )';
   statusEl.textContent = 'Aufnahme bereit';
   apiStatus.textContent = 'Nicht gesendet';
 }
 
-// Upload captured photo + session id
 async function uploadPhoto(){
   if(!capturedBlob){
     showError('Kein Foto zum Senden.');
@@ -374,21 +328,27 @@ async function uploadPhoto(){
     const form = new FormData();
     form.append('photo', capturedBlob, 'photo_' + sessionId + '.jpg');
     form.append('id', sessionId);
+    const question = questionInput.value && questionInput.value.trim();
+    if (question) {
+      form.append('question', question);
+    }
 
     const resp = await fetch(API_BASE, {
       method: 'POST',
       body: form
     });
 
-    if(!resp.ok){
+    if(resp.ok){
+      const json = await resp.json().catch(()=>null);
+      apiStatus.textContent = 'Erfolgreich gesendet';
+      statusEl.textContent = 'Erfolg';
+      info.textContent = 'Foto und Frage gesendet' + (json && json.message ? ': ' + json.message : '.');
+      uploadBtn.style.display = 'none';
+      questionBox.style.display = 'none';
+    } else {
       const text = await resp.text().catch(()=>'' );
       throw new Error('Server antwortete mit ' + resp.status + (text ? (': '+text) : ''));
     }
-    const json = await resp.json().catch(()=>null);
-    apiStatus.textContent = 'Erfolgreich gesendet';
-    statusEl.textContent = 'Erfolg';
-    info.textContent = 'Foto gesendet' + (json && json.message ? ': ' + json.message : '.');
-    uploadBtn.style.display = 'none';
   }catch(err){
     showError('Fehler beim Senden: ' + (err && err.message ? err.message : err));
     apiStatus.textContent = 'Fehler';
@@ -404,6 +364,7 @@ function setBusy(on){
   uploadBtn.disabled = on;
   retakeBtn.disabled = on;
   fileInput.disabled = on;
+  questionInput.disabled = on;
 }
 
 function humanFileSize(bytes) {
@@ -411,7 +372,6 @@ function humanFileSize(bytes) {
   return (bytes / Math.pow(1024, i)).toFixed(2) * 1 + ' ' + ['B','kB','MB','GB'][i];
 }
 
-// helper: dataURL -> Blob (kept for fallback use if needed)
 function dataURLToBlob(dataURL){
   const parts = dataURL.split(',');
   const meta = parts[0];
@@ -424,7 +384,6 @@ function dataURLToBlob(dataURL){
   return new Blob([u8], {type:mime});
 }
 
-// initialize
 (async function init(){
   await startPreview();
   if(!stream){
