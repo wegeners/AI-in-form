@@ -10,10 +10,7 @@ def handler(event, context):
         return {"error": "Missing session_id"}
 
     table_name = (
-        os.environ.get("OCR_RESULTS_TABLE")
-        or os.environ.get("CQPROGRESSQUESTIONS_TABLE_NAME")
-        or os.environ.get("TABLE_NAME")
-        or os.environ.get("Table_NAME")
+        os.environ.get("FORMSESSION_TABLE_NAME")
     )
     if not table_name:
         return {"error": "Table name not configured"}
