@@ -21,22 +21,12 @@ def handler(event, context):
         write_to_table(None, None, err)
         return {"error": err}
 
-    folder = os.environ.get("IMAGE_FOLDER") or os.environ.get("CQPROGRESSQUESTIONS_TABLE_NAME")
-    if not folder:
-        err = "2003 IMAGE_FOLDER doesn't exist"
-        write_to_table(None, session_id, err)
-        return {"error": err}
-
-    image_name = event.get("image_name") or f"{session_id}-image.jpg"
-    file_path = Path(folder) / image_name
-
-    if not file_path.exists():
-        err = "2004 Image_doesnt_exist"
-        write_to_table(None, session_id, err)
-        return {"error": err}
+    file_path = session_id + "-image.jpg"
 
     # API config
     api_key = os.environ.get("OCR_SPACE_API_KEY")
+    bucket = os.environ.get("AIINFORMIMAGEBUCKET_BUCKET_NAME")
+
     if not api_key:
         err = "2005 Missing OCR_SPACE_API_KEY"
         write_to_table(None, session_id, err)
@@ -50,10 +40,18 @@ def handler(event, context):
         "isOverlayRequired": "false",
     }
 
+
+    s3 = boto3.client("s3")
+
+    # Download to /tmp (Lambda’s writable dir)
+    local_path = "/tmp/myfile.jpg"
+    s3.download_file(bucket, file_path, local_path)
+
+
     # Call OCR.space
     try:
-        with open(file_path, "rb") as f:
-            files = {"filename": (image_name, f)}
+        with open(local_path, "rb") as f:
+            files = {"filename": ("myfile.jpg", f)}
             resp = requests.post(
                 "https://api.ocr.space/parse/image",
                 files=files,
@@ -65,8 +63,9 @@ def handler(event, context):
         write_to_table(None, session_id, err)
         return {"error": err}
     # remove file from path
-    os.remove(file_path)
-    
+    #os.remove(file_path)
+    s3.delete_object(Bucket=bucket, Key=file_path)
+
     # HTTP / JSON handling
     try:
         resp.raise_for_status()
