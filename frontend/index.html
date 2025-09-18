@@ -1,80 +1,10 @@
-Understood — here's an updated single-file main page HTML that:
-
-- Removes the redundant chat header inside the iframe container (only the iframe remains).
-- Adds more vertical spacing between form textboxes.
-- Keeps the iframe src pointing to /chatbot.html (change if needed).
-
-Copy into your .html file:
-
-```html
 <!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Meldeänderung - Bayerisches Bürgerportal (Demo)</title>
-<style>
-  :root{
-    --bav-royal:#00308F;
-    --bav-sky:#4DA3FF;
-    --bav-white:#FFFFFF;
-    --bav-gold:#FFD24A;
-    --muted-ink:#1F2A44;
-    --bg:#F4F8FF;
-    --card:#FFFFFF;
-    --danger:#C62828;
-  }
-  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--muted-ink);}
-  a{color:var(--bav-royal);text-decoration:none}
-  header{background:linear-gradient(90deg,var(--bav-royal),var(--bav-sky));color:var(--bav-white);padding:20px 24px;display:flex;align-items:center;gap:16px}
-  .logo{display:flex;align-items:center;gap:12px;font-weight:700}
-  .logo .crest{width:56px;height:56px;border-radius:6px;background:linear-gradient(180deg,var(--bav-white) 0 20%, rgba(255,255,255,0.05) 20% 100%);display:flex;align-items:center;justify-content:center;color:var(--bav-royal);font-weight:700;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-  .meta{margin-left:auto;text-align:right;font-size:14px;opacity:0.95}
-  main{max-width:980px;margin:28px auto;padding:0 18px 120px}
-  .grid{display:grid;grid-template-columns:1fr 360px;gap:20px}
-  .card{background:var(--card);border-radius:10px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,0.06);border:1px solid rgba(15,23,42,0.04)}
-  h1{margin:0;font-size:20px}
-  p.lead{color:var(--muted-ink);margin:8px 0 18px}
-
-  /* Form - increased vertical spacing between controls */
-  form{display:flex;flex-direction:column;gap:18px}
-  fieldset{border:1px solid rgba(15,23,42,0.06);padding:14px;border-radius:8px}
-  legend{font-weight:600;padding:0 6px}
-  label{display:block;font-size:13px;margin-bottom:8px}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  input[type="text"], input[type="email"], input[type="date"], select, textarea{
-    width:100%;padding:12px;border-radius:8px;border:1px solid #d7e6ff;background:transparent;font-size:14px;
-    margin-bottom:8px;
-  }
-  textarea{min-height:96px;resize:vertical}
-  .muted{font-size:13px;color:#57607a;margin-top:6px}
-  .actions{display:flex;gap:10px;align-items:center;margin-top:6px}
-  .btn{background:var(--bav-royal);color:var(--bav-white);padding:10px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
-  .btn.secondary{background:transparent;border:1px solid rgba(15,23,42,0.08);color:var(--muted-ink)}
-  .notice{background:linear-gradient(90deg, rgba(77,163,255,0.08), rgba(0,48,143,0.02));border-left:6px solid var(--bav-royal);padding:12px;border-radius:8px;font-size:14px}
-
-  aside .help{font-size:14px}
-  .doc-list{list-style:none;padding:0;margin:12px 0 0}
-  .doc-list li{padding:8px 6px;border-radius:6px;font-size:14px;color:var(--muted-ink)}
-  .doc-list li + li{margin-top:6px}
-
-  footer{max-width:980px;margin:18px auto;padding:8px 18px;color:#6b7280;font-size:13px}
-
-  /* Chatbot iframe container - only iframe, no header */
-  .chat-iframe{
-    position:fixed;right:18px;bottom:18px;width:360px;height:480px;border-radius:12px;overflow:hidden;
-    box-shadow:0 12px 40px rgba(3,10,34,0.25);border:1px solid rgba(0,0,0,0.06);background:var(--card);z-index:1200;
-  }
-  .chat-iframe iframe{border:0;width:100%;height:100%;display:block}
-
-  @media(max-width:900px){
-    .grid{grid-template-columns:1fr}
-    .chat-iframe{right:12px;bottom:12px;width:320px;height:420px}
-  }
-
-  .error{border-color:var(--danger)!important;box-shadow:0 0 0 3px rgba(198,40,40,0.08)}
-  .small{font-size:13px;color:#5b677b}
-</style>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <header>
@@ -210,7 +140,6 @@ Copy into your .html file:
   <div>© Land Bayern — Demo. Diese Seite ist ein statisches Mockup und stellt kein offizielles Formular dar.</div>
 </footer>
 
-<!-- Chatbot iframe only (no header inside main page) -->
 <div class="chat-iframe" aria-label="Chatbot">
   <iframe src="chatbot.html" title="Bürgerchat" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
 </div>
@@ -274,4 +203,3 @@ Copy into your .html file:
 </script>
 </body>
 </html>
-```
