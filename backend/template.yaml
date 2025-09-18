@@ -89,6 +89,7 @@ Resources:
           FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
           AIINFORMIMAGEBUCKET_BUCKET_NAME: !Ref AIInformImageBucket
           AIINFORMIMAGEBUCKET_BUCKET_ARN: !GetAtt AIInformImageBucket.Arn
+          OCR_SPACE_API_KEY: K81073658288957
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
@@ -398,6 +399,7 @@ Resources:
         Variables:
           FORMSESSION_TABLE_NAME: !Ref FormSession
           FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+          OPENROUTER_API_KEY: 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
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
