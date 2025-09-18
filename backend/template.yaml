@@ -1,0 +1,279 @@
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: Api
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /:
+            delete:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${deleteSession.Arn}/invocations
+              responses: {}
+            put:
+              responses:
+                '200':
+                  description: default OK response
+              x-amazon-apigateway-integration:
+                credentials: !GetAtt ApiToStateMachineRole.Arn
+                httpMethod: POST
+                type: aws
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:states:action/StartExecution
+                responses:
+                  default:
+                    statusCode: 200
+                requestTemplates:
+                  application/json: !Sub |-
+                    {
+                      "input": "$util.escapeJavaScript($input.json('$'))",
+                      "name": "$context.requestId",
+                      "stateMachineArn": "${StateMachine}"
+                    }
+          /response:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getModelResponse.Arn}/invocations
+              responses: {}
+          /{session}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getModelResponseFromSession.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        MaxAge: 5
+  FormSession:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  getTextFromImage:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: getTextFromImage
+      CodeUri: src/Function
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+  getTextFromImageLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${getTextFromImage}
+  AIInformWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-aiinformw-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: alias/aws/s3
+      PublicAccessBlockConfiguration:
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  AIInformWebsiteBucketBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AIInformWebsiteBucket
+      PolicyDocument:
+        Id: RequireEncryptionInTransit
+        Version: '2012-10-17'
+        Statement:
+          - Principal: '*'
+            Action: '*'
+            Effect: Deny
+            Resource:
+              - !GetAtt AIInformWebsiteBucket.Arn
+              - !Sub ${AIInformWebsiteBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  deleteSession:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: deleteSession
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+      Events:
+        ApiDELETE:
+          Type: Api
+          Properties:
+            Path: /
+            Method: DELETE
+            RestApiId: !Ref Api
+  deleteSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${deleteSession}
+  StateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Definition:
+        StartAt: LambdaTask
+        States:
+          LambdaTask:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            Parameters:
+              Payload.$: $
+              FunctionName: ${LambdaFunction1}
+            End: true
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: '*'
+        - LambdaInvokePolicy:
+            FunctionName: !Ref getTextFromImage
+      Tracing:
+        Enabled: true
+      Type: STANDARD
+      DefinitionSubstitutions:
+        LambdaFunction1: !GetAtt getTextFromImage.Arn
+      Events:
+        ApiPUT:
+          Type: Api
+          Properties:
+            Path: /
+            Method: PUT
+            RestApiId: !Ref Api
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub
+        - /aws/vendedlogs/states/${AWS::StackName}-${ResourceId}-Logs
+        - ResourceId: StateMachine
+  ApiToStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: !Sub apigateway.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: ExecuteStateMachine
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !GetAtt StateMachine.Arn
+  getModelResponseFromSession:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: getModelResponseFromSession
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+      Events:
+        ApiGETsession:
+          Type: Api
+          Properties:
+            Path: /{session}
+            Method: GET
+            RestApiId: !Ref Api
+  getModelResponseFromSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${getModelResponseFromSession}
+  getModelResponse:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: getModelResponse
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        ApiGETresponse:
+          Type: Api
+          Properties:
+            Path: /response
+            Method: GET
+            RestApiId: !Ref Api
+  getModelResponseLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${getModelResponse}
