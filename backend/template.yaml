@@ -25,7 +25,7 @@ Resources:
                 type: aws_proxy
                 uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${deleteSession.Arn}/invocations
               responses: {}
-            put:
+            post:
               responses:
                 '200':
                   description: default OK response
@@ -321,30 +321,18 @@ Resources:
             Path: /{session}
             Method: PUT
             RestApiId: !Ref Api
+        ApiPOSTsession:
+          Type: Api
+          Properties:
+            Path: /{session}
+            Method: POST
+            RestApiId: !Ref Api
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub
         - /aws/vendedlogs/states/${AWS::StackName}-${ResourceId}-Logs
         - ResourceId: StateMachine
-  ApiToStateMachineRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action: sts:AssumeRole
-            Principal:
-              Service: !Sub apigateway.${AWS::URLSuffix}
-      Policies:
-        - PolicyName: ExecuteStateMachine
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: states:StartExecution
-                Resource: !GetAtt StateMachine.Arn
   getModelResponseFromSession:
     Type: AWS::Serverless::Function
     Properties:
@@ -537,3 +525,21 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+  ApiToStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: !Sub apigateway.${AWS::URLSuffix}
+      Policies:
+        - PolicyName: ExecuteStateMachine
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !GetAtt StateMachine.Arn
