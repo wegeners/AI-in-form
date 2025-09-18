@@ -48,18 +48,18 @@ def handler(event, context):
 
         api_response = get_openrouter_response(messages)
 
-        table_name = os.environ.get("DYNAMODB_TABLE_NAME")
+        table_name = os.environ.get("FORMSESSION_TABLE_NAME")
         if not table_name:
-            raise ValueError("DYNAMODB_TABLE_NAME environment variable not set")
+            raise ValueError("FORMSESSION_TABLE_NAME environment variable not set")
 
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)
 
         table.put_item(
             Item={
-                "partitionkey": sessionID,
-                "SK": 3,
-                "Value": api_response,
+                "sessionId": sessionID,
+                "step": 3,
+                "value": api_response,
                 "timestamp": datetime.utcnow().isoformat(),
                 "completed": True,
             }
