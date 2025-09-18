@@ -73,9 +73,9 @@ Resources:
       Description: !Sub
         - Stack ${AWS::StackName} Function ${ResourceName}
         - ResourceName: getTextFromImage
-      CodeUri: src/Function
+      CodeUri: src/get-text-from-image
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -126,9 +126,9 @@ Resources:
       Description: !Sub
         - Stack ${AWS::StackName} Function ${ResourceName}
         - ResourceName: deleteSession
-      CodeUri: src/Function2
+      CodeUri: src/delete-session
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -228,9 +228,9 @@ Resources:
       Description: !Sub
         - Stack ${AWS::StackName} Function ${ResourceName}
         - ResourceName: getModelResponseFromSession
-      CodeUri: src/Function2
+      CodeUri: src/get-model-response-from-session
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
@@ -259,9 +259,9 @@ Resources:
       Description: !Sub
         - Stack ${AWS::StackName} Function ${ResourceName}
         - ResourceName: getModelResponse
-      CodeUri: src/Function2
+      CodeUri: src/get-model-response
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: python3.13
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
