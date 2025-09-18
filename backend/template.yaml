@@ -11,7 +11,14 @@ Resources:
         openapi: '3.0'
         info: {}
         paths:
-          /:
+          /response:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getModelResponse.Arn}/invocations
+              responses: {}
+          /{session}:
             delete:
               x-amazon-apigateway-integration:
                 httpMethod: POST
@@ -37,14 +44,7 @@ Resources:
                       "name": "$context.requestId",
                       "stateMachineArn": "${StateMachine}"
                     }
-          /response:
-            get:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getModelResponse.Arn}/invocations
-              responses: {}
-          /{session}:
+          /response/{session}:
             get:
               x-amazon-apigateway-integration:
                 httpMethod: POST
@@ -59,12 +59,16 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: sessionId
           AttributeType: S
+        - AttributeName: step
+          AttributeType: 'N'
       BillingMode: PAY_PER_REQUEST
       KeySchema:
-        - AttributeName: id
+        - AttributeName: sessionId
           KeyType: HASH
+        - AttributeName: step
+          KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
   getTextFromImage:
@@ -140,10 +144,10 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
       Events:
-        ApiDELETE:
+        ApiDELETEsession:
           Type: Api
           Properties:
-            Path: /
+            Path: /{session}
             Method: DELETE
             RestApiId: !Ref Api
   deleteSessionLogGroup:
@@ -155,14 +159,86 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Definition:
-        StartAt: LambdaTask
+        StartAt: CreateSession
         States:
-          LambdaTask:
+          CreateSession:
+            Parameters:
+              FunctionName: ${CreateSessionLambda}
+              Payload.$: $
+            Resource: arn:aws:states:::lambda:invoke
+            Type: Task
+            Next: GetTextFromImage
+          GetTextFromImage:
             Type: Task
             Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
             Parameters:
               Payload.$: $
-              FunctionName: ${LambdaFunction1}
+              FunctionName: ${GetTextFromImage}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: EnrichModelRequest
+          EnrichModelRequest:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${EnrichModelRequest}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: GetModelResponse
+          GetModelResponse:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${GetModelResponse}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: PersistModelResponse
+          PersistModelResponse:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${PersistModelResponse}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
             End: true
       Logging:
         Level: ALL
@@ -185,17 +261,35 @@ Resources:
                 - logs:DescribeLogGroups
               Resource: '*'
         - LambdaInvokePolicy:
+            FunctionName: !Ref createSession
+        - LambdaInvokePolicy:
             FunctionName: !Ref getTextFromImage
+        - LambdaInvokePolicy:
+            FunctionName: !Ref enrichModelRequest
+        - LambdaInvokePolicy:
+            FunctionName: !Ref getModelResponse
+        - LambdaInvokePolicy:
+            FunctionName: !Ref persistModelResponse
       Tracing:
         Enabled: true
       Type: STANDARD
       DefinitionSubstitutions:
-        LambdaFunction1: !GetAtt getTextFromImage.Arn
+        CreateSessionLambda: !GetAtt createSession.Arn
+        GetTextFromImage: !GetAtt getTextFromImage.Arn
+        EnrichModelRequest: !GetAtt enrichModelRequest.Arn
+        GetModelResponse: !GetAtt getModelResponse.Arn
+        PersistModelResponse: !GetAtt persistModelResponse.Arn
       Events:
         ApiPUT:
           Type: Api
           Properties:
             Path: /
+            Method: PUT
+            RestApiId: !Ref Api
+        ApiPUTsession:
+          Type: Api
+          Properties:
+            Path: /{session}
             Method: PUT
             RestApiId: !Ref Api
   StateMachineLogGroup:
@@ -242,10 +336,10 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
       Events:
-        ApiGETsession:
+        ApiGETresponsesession:
           Type: Api
           Properties:
-            Path: /{session}
+            Path: /response/{session}
             Method: GET
             RestApiId: !Ref Api
   getModelResponseFromSessionLogGroup:
@@ -272,8 +366,116 @@ Resources:
             Path: /response
             Method: GET
             RestApiId: !Ref Api
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
   getModelResponseLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub /aws/lambda/${getModelResponse}
+  createSession:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: createSession
+      CodeUri: src/create-session
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+  createSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${createSession}
+  enrichModelRequest:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: enrichModelRequest
+      CodeUri: src/enrich-model-request
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+  enrichModelRequestLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${enrichModelRequest}
+  persistModelResponse:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: persistModelResponse
+      CodeUri: src/persist-model-response
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
+  persistModelResponseLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${persistModelResponse}
+  AIInformImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-aiinformi-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: alias/aws/s3
+      PublicAccessBlockConfiguration:
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  AIInformImageBucketBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AIInformImageBucket
+      PolicyDocument:
+        Id: RequireEncryptionInTransit
+        Version: '2012-10-17'
+        Statement:
+          - Principal: '*'
+            Action: '*'
+            Effect: Deny
+            Resource:
+              - !GetAtt AIInformImageBucket.Arn
+              - !Sub ${AIInformImageBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
