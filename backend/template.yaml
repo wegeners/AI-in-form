@@ -20,11 +20,36 @@ Resources:
               responses: {}
           /{session}:
             delete:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${deleteSession.Arn}/invocations
               responses: {}
             put:
-              responses: {}
+              responses:
+                '200':
+                  description: default OK response
+              x-amazon-apigateway-integration:
+                credentials: !GetAtt ApiToStateMachineRole.Arn
+                httpMethod: POST
+                type: aws
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:states:action/StartExecution
+                responses:
+                  default:
+                    statusCode: 200
+                requestTemplates:
+                  application/json: !Sub |-
+                    {
+                      "input": "$util.escapeJavaScript($input.json('$'))",
+                      "name": "$context.requestId",
+                      "stateMachineArn": "${StateMachine}"
+                    }
           /response/{session}:
             get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${getModelResponseFromSession.Arn}/invocations
               responses: {}
       EndpointConfiguration: REGIONAL
       TracingEnabled: true
@@ -114,6 +139,13 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
+      Events:
+        ApiDELETEsession:
+          Type: Api
+          Properties:
+            Path: /{session}
+            Method: DELETE
+            RestApiId: !Ref Api
   deleteSessionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -166,6 +198,12 @@ Resources:
             Path: /
             Method: PUT
             RestApiId: !Ref Api
+        ApiPUTsession:
+          Type: Api
+          Properties:
+            Path: /{session}
+            Method: PUT
+            RestApiId: !Ref Api
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -209,6 +247,13 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
+      Events:
+        ApiGETresponsesession:
+          Type: Api
+          Properties:
+            Path: /response/{session}
+            Method: GET
+            RestApiId: !Ref Api
   getModelResponseFromSessionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
