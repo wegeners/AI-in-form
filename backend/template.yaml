@@ -366,6 +366,13 @@ Resources:
             Path: /response
             Method: GET
             RestApiId: !Ref Api
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
   getModelResponseLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -383,6 +390,13 @@ Resources:
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
   createSessionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -400,6 +414,13 @@ Resources:
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
   enrichModelRequestLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -417,6 +438,13 @@ Resources:
       MemorySize: 3008
       Timeout: 30
       Tracing: Active
+      Environment:
+        Variables:
+          FORMSESSION_TABLE_NAME: !Ref FormSession
+          FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FormSession
   persistModelResponseLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain

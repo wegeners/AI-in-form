@@ -31,7 +31,7 @@ def handler(event, context):
     print(event)
 
     try:
-        body = json.loads(event.get("body", "{}"))
+        body = event.get("body", "{}")
         sessionID = body.get("sessionID")
         messages = body.get("ocrValue", [])
         userQuestion = body.get("userQuestion")
@@ -48,10 +48,10 @@ def handler(event, context):
 
         api_response = get_openrouter_response(messages)
 
-        table_name = os.environ.get("CQPROGRESSQUESTIONS_TABLE_NAME")
+        table_name = os.environ.get("DYNAMODB_TABLE_NAME")
         if not table_name:
             raise ValueError("DYNAMODB_TABLE_NAME environment variable not set")
-        
+
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)
 
@@ -72,11 +72,7 @@ def handler(event, context):
                 "Content-Type": "application/json",
             },
         }
-    except ValueError as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)}),
-        }
+
     except requests.exceptions.RequestException as e:
         return {
             "statusCode": 500,
