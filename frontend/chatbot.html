@@ -10,7 +10,7 @@
 <body>
 <div class="wrap" role="application">
   <header>
-    <div style="width:36px;height:36px;border-radius:8px;background:white;color:var(--bav-royal);display:flex;align-items:center;justify-content:center;font-weight:700">B</div>
+    <div style="width:36px;height:36px;border-radius:8px;background:white;color:var(--bav-royal);display:flex;align-items:center;justify-content:center;font-weight:700">BY</div>
     <div class="title">Bürgerchat (Demo)</div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
       <div id="connectionStatus" class="meta">Bereit</div>
@@ -237,25 +237,64 @@ overlay.addEventListener('click', closeQr);
 copyBtn.addEventListener('click', copyUrl);
 openBtn.addEventListener('click', () => { window.open(currentQrUrl, '_blank'); });
 let currentQrUrl = '';
-function openQr(){
+let qrPollInterval = null;
+function openQr() {
   const hash = generateRandomHash(20);
   currentQrUrl = 'camera.html?id=' + encodeURIComponent(hash);
   renderQr(currentQrUrl);
   qrUrlEl.textContent = currentQrUrl;
   overlay.classList.add('show');
-  overlay.setAttribute('aria-hidden','false');
+  overlay.setAttribute('aria-hidden', 'false');
   qrModal.classList.add('show');
-  qrModal.setAttribute('aria-hidden','false');
-  qrClose.focus();
+  qrModal.setAttribute('aria-hidden', 'false');
+  qrClose.style.display = ''; // Show close button again
+  overlay.removeEventListener('click', closeQr);
+  // Start polling API
+  startQrPolling(hash);
 }
-function closeQr(){
+qrClose.addEventListener('click', () => {
+  closeQr();
+  stopQrPolling();
+});
+
+function closeQr() {
   overlay.classList.remove('show');
-  overlay.setAttribute('aria-hidden','true');
+  overlay.setAttribute('aria-hidden', 'true');
   qrModal.classList.remove('show');
-  qrModal.setAttribute('aria-hidden','true');
+  qrModal.setAttribute('aria-hidden', 'true');
   qrCanvas.innerHTML = '';
   qrUrlEl.textContent = '—';
   currentQrUrl = '';
+  stopQrPolling(); // <-- Make sure polling is stopped
+}
+
+function startQrPolling(id) {
+  stopQrPolling();
+  const startTime = Date.now();
+  qrPollInterval = setInterval(async () => {
+    try {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > 60000) { // 1 minute timeout
+        stopQrPolling();
+        alert('QR-Code wurde nicht verwendet. Bitte versuchen Sie es erneut.');
+        closeQr();
+        return;
+      }
+      const resp = await fetch(`/api/upload/status?id=${encodeURIComponent(id)}`, { method: 'GET' });
+      if (resp.status === 200) {
+        closeQr();
+      }
+    } catch (e) {
+      // Optionally handle error
+    }
+  }, 5000);
+}
+
+function stopQrPolling() {
+  if (qrPollInterval) {
+    clearInterval(qrPollInterval);
+    qrPollInterval = null;
+  }
 }
 function copyUrl(){
   if(!currentQrUrl) return;
