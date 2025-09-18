@@ -261,7 +261,15 @@ Resources:
                 - logs:DescribeLogGroups
               Resource: '*'
         - LambdaInvokePolicy:
+            FunctionName: !Ref createSession
+        - LambdaInvokePolicy:
             FunctionName: !Ref getTextFromImage
+        - LambdaInvokePolicy:
+            FunctionName: !Ref enrichModelRequest
+        - LambdaInvokePolicy:
+            FunctionName: !Ref getModelResponse
+        - LambdaInvokePolicy:
+            FunctionName: !Ref persistModelResponse
       Tracing:
         Enabled: true
       Type: STANDARD
