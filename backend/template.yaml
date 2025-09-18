@@ -59,12 +59,16 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: sessionId
           AttributeType: S
+        - AttributeName: step
+          AttributeType: 'N'
       BillingMode: PAY_PER_REQUEST
       KeySchema:
-        - AttributeName: id
+        - AttributeName: sessionId
           KeyType: HASH
+        - AttributeName: step
+          KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
   getTextFromImage:
@@ -155,14 +159,86 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Definition:
-        StartAt: LambdaTask
+        StartAt: CreateSession
         States:
-          LambdaTask:
+          CreateSession:
+            Parameters:
+              FunctionName: ${CreateSessionLambda}
+              Payload.$: $
+            Resource: arn:aws:states:::lambda:invoke
+            Type: Task
+            Next: GetTextFromImage
+          GetTextFromImage:
             Type: Task
             Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
             Parameters:
               Payload.$: $
-              FunctionName: ${LambdaFunction1}
+              FunctionName: ${GetTextFromImage}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: EnrichModelRequest
+          EnrichModelRequest:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${EnrichModelRequest}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: GetModelResponse
+          GetModelResponse:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${GetModelResponse}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
+            Next: PersistModelResponse
+          PersistModelResponse:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke
+            OutputPath: $.Payload
+            Parameters:
+              Payload.$: $
+              FunctionName: ${PersistModelResponse}
+            Retry:
+              - ErrorEquals:
+                  - Lambda.ServiceException
+                  - Lambda.AWSLambdaException
+                  - Lambda.SdkClientException
+                  - Lambda.TooManyRequestsException
+                IntervalSeconds: 1
+                MaxAttempts: 3
+                BackoffRate: 2
+                JitterStrategy: FULL
             End: true
       Logging:
         Level: ALL
@@ -190,7 +266,11 @@ Resources:
         Enabled: true
       Type: STANDARD
       DefinitionSubstitutions:
-        LambdaFunction1: !GetAtt getTextFromImage.Arn
+        CreateSessionLambda: !GetAtt createSession.Arn
+        GetTextFromImage: !GetAtt getTextFromImage.Arn
+        EnrichModelRequest: !GetAtt enrichModelRequest.Arn
+        GetModelResponse: !GetAtt getModelResponse.Arn
+        PersistModelResponse: !GetAtt persistModelResponse.Arn
       Events:
         ApiPUT:
           Type: Api
@@ -283,3 +363,54 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub /aws/lambda/${getModelResponse}
+  createSession:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: createSession
+      CodeUri: src/create-session
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+  createSessionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${createSession}
+  enrichModelRequest:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: enrichModelRequest
+      CodeUri: src/enrich-model-request
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+  enrichModelRequestLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${enrichModelRequest}
+  persistModelResponse:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: persistModelResponse
+      CodeUri: src/persist-model-response
+      Handler: lambda.handler
+      Runtime: python3.11
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+  persistModelResponseLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${persistModelResponse}
