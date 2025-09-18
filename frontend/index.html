@@ -1,3 +1,12 @@
+Understood — here's an updated single-file main page HTML that:
+
+- Removes the redundant chat header inside the iframe container (only the iframe remains).
+- Adds more vertical spacing between form textboxes.
+- Keeps the iframe src pointing to /chatbot.html (change if needed).
+
+Copy into your .html file:
+
+```html
 <!doctype html>
 <html lang="de">
 <head>
@@ -5,28 +14,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Meldeänderung - Bayerisches Bürgerportal (Demo)</title>
 <style>
-  /* Bavarian-inspired palette */
   :root{
-    --bav-royal:#00308F;    /* deep blue */
-    --bav-sky:#4DA3FF;      /* lighter blue */
+    --bav-royal:#00308F;
+    --bav-sky:#4DA3FF;
     --bav-white:#FFFFFF;
-    --bav-gold:#FFD24A;     /* accent gold */
+    --bav-gold:#FFD24A;
     --muted-ink:#1F2A44;
     --bg:#F4F8FF;
     --card:#FFFFFF;
     --danger:#C62828;
   }
-
-  /* Base */
   html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--muted-ink);}
   a{color:var(--bav-royal);text-decoration:none}
   header{background:linear-gradient(90deg,var(--bav-royal),var(--bav-sky));color:var(--bav-white);padding:20px 24px;display:flex;align-items:center;gap:16px}
   .logo{display:flex;align-items:center;gap:12px;font-weight:700}
-  .logo .crest{
-    width:56px;height:56px;border-radius:6px;background:linear-gradient(180deg,var(--bav-white) 0 20%, rgba(255,255,255,0.05) 20% 100%);
-    display:flex;align-items:center;justify-content:center;color:var(--bav-royal);font-weight:700;font-size:18px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.08);
-  }
+  .logo .crest{width:56px;height:56px;border-radius:6px;background:linear-gradient(180deg,var(--bav-white) 0 20%, rgba(255,255,255,0.05) 20% 100%);display:flex;align-items:center;justify-content:center;color:var(--bav-royal);font-weight:700;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
   .meta{margin-left:auto;text-align:right;font-size:14px;opacity:0.95}
   main{max-width:980px;margin:28px auto;padding:0 18px 120px}
   .grid{display:grid;grid-template-columns:1fr 360px;gap:20px}
@@ -34,49 +36,42 @@
   h1{margin:0;font-size:20px}
   p.lead{color:var(--muted-ink);margin:8px 0 18px}
 
-  /* Form */
-  form{display:flex;flex-direction:column;gap:12px}
-  fieldset{border:1px solid rgba(15,23,42,0.06);padding:12px;border-radius:8px}
+  /* Form - increased vertical spacing between controls */
+  form{display:flex;flex-direction:column;gap:18px}
+  fieldset{border:1px solid rgba(15,23,42,0.06);padding:14px;border-radius:8px}
   legend{font-weight:600;padding:0 6px}
-  label{display:block;font-size:13px;margin-bottom:6px}
+  label{display:block;font-size:13px;margin-bottom:8px}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   input[type="text"], input[type="email"], input[type="date"], select, textarea{
-    width:100%;padding:10px;border-radius:8px;border:1px solid #d7e6ff;background:transparent;font-size:14px;
+    width:100%;padding:12px;border-radius:8px;border:1px solid #d7e6ff;background:transparent;font-size:14px;
+    margin-bottom:8px;
   }
-  textarea{min-height:80px;resize:vertical}
+  textarea{min-height:96px;resize:vertical}
   .muted{font-size:13px;color:#57607a;margin-top:6px}
   .actions{display:flex;gap:10px;align-items:center;margin-top:6px}
   .btn{background:var(--bav-royal);color:var(--bav-white);padding:10px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
   .btn.secondary{background:transparent;border:1px solid rgba(15,23,42,0.08);color:var(--muted-ink)}
   .notice{background:linear-gradient(90deg, rgba(77,163,255,0.08), rgba(0,48,143,0.02));border-left:6px solid var(--bav-royal);padding:12px;border-radius:8px;font-size:14px}
 
-  /* Sidebar */
   aside .help{font-size:14px}
   .doc-list{list-style:none;padding:0;margin:12px 0 0}
   .doc-list li{padding:8px 6px;border-radius:6px;font-size:14px;color:var(--muted-ink)}
   .doc-list li + li{margin-top:6px}
 
-  /* Footer */
   footer{max-width:980px;margin:18px auto;padding:8px 18px;color:#6b7280;font-size:13px}
 
-  /* Chatbot iframe (bottom-right) */
+  /* Chatbot iframe container - only iframe, no header */
   .chat-iframe{
     position:fixed;right:18px;bottom:18px;width:360px;height:480px;border-radius:12px;overflow:hidden;
     box-shadow:0 12px 40px rgba(3,10,34,0.25);border:1px solid rgba(0,0,0,0.06);background:var(--card);z-index:1200;
-    display:flex;flex-direction:column;
   }
-  .chat-header{background:linear-gradient(90deg,var(--bav-royal),var(--bav-sky));color:var(--bav-white);padding:10px 12px;display:flex;align-items:center;gap:10px}
-  .chat-header .title{font-weight:700}
-  .chat-body{flex:1;background:#f7fbff;padding:8px}
-  .chat-iframe iframe{border:0;width:100%;height:100%}
+  .chat-iframe iframe{border:0;width:100%;height:100%;display:block}
 
-  /* Responsive */
   @media(max-width:900px){
     .grid{grid-template-columns:1fr}
     .chat-iframe{right:12px;bottom:12px;width:320px;height:420px}
   }
 
-  /* Simple validation highlight */
   .error{border-color:var(--danger)!important;box-shadow:0 0 0 3px rgba(198,40,40,0.08)}
   .small{font-size:13px;color:#5b677b}
 </style>
@@ -215,30 +210,12 @@
   <div>© Land Bayern — Demo. Diese Seite ist ein statisches Mockup und stellt kein offizielles Formular dar.</div>
 </footer>
 
-<!-- Chatbot placeholder in bottom-right -->
-<div class="chat-iframe" aria-label="Chatbot (Platzhalter)">
-  <div class="chat-header">
-    <div style="width:36px;height:36px;border-radius:8px;background:var(--bav-white);color:var(--bav-royal);display:flex;align-items:center;justify-content:center;font-weight:700">B</div>
-    <div class="title">Bürgerchat (Demo)</div>
-    <div style="margin-left:auto;font-size:13px;opacity:0.9">Offline</div>
-  </div>
-  <div class="chat-body">
-    <!-- Placeholder iframe: replace src with your chatbot URL when available -->
-    <iframe srcdoc='
-      <!doctype html><html><head><meta charset="utf-8"><style>
-        body{font-family:Inter,Arial,sans-serif;margin:0;background:#f7fbff;color:#0b1a3a}
-        .wrap{padding:12px}
-        .bot{background:#ffffff;padding:10px;border-radius:8px;border:1px solid rgba(0,48,143,0.06);margin-bottom:10px}
-        .hint{font-size:13px;color:#3b4b6b}
-      </style></head><body><div class="wrap">
-        <div class="bot"><strong>Bürgerchat (Demo)</strong><div style="margin-top:6px" class="hint">Dies ist ein statischer Platzhalter für einen Chatbot. Keine Daten werden gesendet.</div></div>
-        <div style="font-size:13px;color:#5b677b">Beispiel-Anfragen:<ul><li>Wie melde ich meinen Umzug?</li><li>Welche Unterlagen werden benötigt?</li></ul></div>
-      </div></body></html>' title="Bürgerchat - Demo"></iframe>
-  </div>
+<!-- Chatbot iframe only (no header inside main page) -->
+<div class="chat-iframe" aria-label="Chatbot">
+  <iframe src="chatbot.html" title="Bürgerchat" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
 </div>
 
 <script>
-  // Simple client-side "validation" and demo result rendering
   function qs(id){return document.getElementById(id)}
   function resetForm(){
     qs('address-form').reset();
@@ -268,7 +245,6 @@
       return false;
     }
 
-    // Build a mock summary (no data sent anywhere)
     var summary = {
       vorname: qs('given').value,
       nachname: qs('family').value,
@@ -289,7 +265,6 @@
     return false;
   }
 
-  // Minimal HTML escaping
   function escapeHtml(s){
     if(!s) return '';
     return s.replace(/[&<>"\']/g, function(m){
@@ -299,3 +274,4 @@
 </script>
 </body>
 </html>
+```
