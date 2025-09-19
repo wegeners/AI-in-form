@@ -60,7 +60,7 @@ def handler(event, context):
             Item={
                 "sessionId": session_id,
                 "step": 2,
-                "value": api_response,
+                "value": api_response["choices"][0]["message"]["content"],
                 "timestamp": datetime.utcnow().isoformat(),
                 "completed": True,
             }

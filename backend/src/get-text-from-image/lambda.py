@@ -63,7 +63,7 @@ def handler(event, context):
         return {"error": err}
     # remove file from path
     # os.remove(file_path)
-    s3.delete_object(Bucket=bucket, Key=file_path)
+    #s3.delete_object(Bucket=bucket, Key=file_path)
 
     # HTTP / JSON handling
     try:
