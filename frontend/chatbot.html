@@ -332,9 +332,9 @@
       let qrPollInterval = null;
       function openQr() {
         const hash = generateRandomHash(20);
-        // Use your domain for the QR code and links:
+        // Use your domain for the QR code and links. Use `sessionId` so camera.html can read it:
         currentQrUrl =
-          "http://ai-in-form-aiinformw-458650368656.s3-website.eu-central-1.amazonaws.com/camera.html?id=" +
+          "https://byhack.tillseemann.com/camera.html?sessionId=" +
           encodeURIComponent(hash);
         renderQr(currentQrUrl);
         qrUrlEl.textContent = currentQrUrl;
@@ -383,7 +383,7 @@
               return;
             }
             const resp = await fetch(
-              `/api/upload/status?id=${encodeURIComponent(id)}`,
+              `/api/upload/status?sessionId=${encodeURIComponent(id)}`,
               { method: "GET" }
             );
             if (resp.status === 200) {
