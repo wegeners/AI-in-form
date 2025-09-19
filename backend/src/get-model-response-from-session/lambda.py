@@ -2,6 +2,17 @@ import json
 import os
 import boto3
 from boto3.dynamodb.conditions import Key
+from decimal import Decimal
+
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            if o % 1 == 0:
+                return int(o)
+            else:
+                return float(o)
+        return super(DecimalEncoder, self).default(o)
 
 
 def handler(event, context):
@@ -45,7 +56,7 @@ def handler(event, context):
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps(items)
+            'body': json.dumps(items, cls=DecimalEncoder)
         }
     except Exception as e:
         print(e)
