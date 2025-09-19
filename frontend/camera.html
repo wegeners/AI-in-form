@@ -412,6 +412,7 @@
             sessionId: sessionId,
           };
           if (question) payload.userQuestion = question;
+          // Removed inclusion of payload.image
 
           const base = API_BASE.replace(/\/$/, "");
           const url = base + "/" + encodeURIComponent(sessionId);

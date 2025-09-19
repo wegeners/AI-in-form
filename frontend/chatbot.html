@@ -233,62 +233,134 @@
           return false;
         }
       }
-      async function pollForResult(url, placeholder) {
-        let lastText = "";
-        let startedAt = Date.now();
-        const showSpinnerAfter = 1200;
-        while (true) {
+      // Polls `url` until the record contains `completed === true`.
+      // Returns the record value (or throws). Supports abort via `opts.signal`.
+      async function pollForResult(url, placeholder, opts = {}) {
+        const {
+          signal: externalSignal = undefined,
+          timeoutMs = 300000,
+          intervalMs = POLL_INTERVAL_MS,
+          maxIntervalMs = 5000,
+        } = opts;
+
+        function safeSet(text, { error = false } = {}) {
+          if (!placeholder) return;
+          const out = placeholder._progressEl || placeholder;
           try {
-            const resp = await fetch(url, {
+            out.textContent = text;
+            if (error && placeholder.classList)
+              placeholder.classList.add("error");
+            out.scrollIntoView?.({ behavior: "smooth", block: "end" });
+          } catch (e) {
+            // DOM might have been removed — ignore
+          }
+        }
+
+        const controller = new AbortController();
+        const signal = controller.signal;
+        if (externalSignal) {
+          if (externalSignal.aborted) controller.abort();
+          else
+            externalSignal.addEventListener("abort", () => controller.abort(), {
+              once: true,
+            });
+        }
+
+        const start = Date.now();
+        let attempt = 0;
+        let lastValue = null;
+
+        while (true) {
+          if (signal.aborted) {
+            safeSet("Abgebrochen", { error: true });
+            throw new DOMException("Polling aborted", "AbortError");
+          }
+          if (Date.now() - start > timeoutMs) {
+            safeSet("Fehler: Timeout beim Abrufen der Antwort", {
+              error: true,
+            });
+            throw new Error("pollForResult: timeout");
+          }
+
+          let resp;
+          try {
+            resp = await fetch(url, {
               method: "GET",
               headers: { Accept: "application/json" },
+              signal,
             });
-            if (!resp.ok) throw new Error("Serverfehler beim Abfragen");
-            const json = await resp.json();
-            if (json.status === "error") {
-              placeholder._progressEl.textContent =
-                "Fehler: " + (json.error || "Unbekannt");
-              placeholder.classList.add("error");
-              liveStatus.textContent = "Fehler";
-              connectionStatus.textContent = "Fehler";
-              return;
-            }
-            if (json.status === "pending") {
-              const now = Date.now();
-              if (now - startedAt > showSpinnerAfter) {
-                liveStatus.textContent = "Generierung läuft…";
-                connectionStatus.textContent = "Verarbeitung";
-              }
-              if (json.partialText && json.partialText !== lastText) {
-                lastText = json.partialText;
-                placeholder._progressEl.textContent =
-                  sanitizeForDisplay(lastText);
-              } else {
-                const dots = Math.floor((Date.now() / 400) % 4);
-                placeholder._progressEl.textContent =
-                  "Antwort wird generiert" + ".".repeat(dots);
-              }
-              await sleep(POLL_INTERVAL_MS);
-              continue;
-            }
-            if (json.status === "complete") {
-              const text = json.text || json.result || "";
-              placeholder._progressEl.textContent = sanitizeForDisplay(
-                text || "(leere Antwort)"
-              );
-              liveStatus.textContent = "Fertig";
-              connectionStatus.textContent = "Bereit";
-              return;
-            }
-            await sleep(POLL_INTERVAL_MS);
           } catch (err) {
-            placeholder._progressEl.textContent =
-              "Fehler beim Abrufen: " + err.message;
-            placeholder.classList.add("error");
-            liveStatus.textContent = "Fehler";
-            connectionStatus.textContent = "Offline";
-            return;
+            // network error — retry with simple backoff
+            attempt++;
+            const wait = Math.min(intervalMs * 2 ** attempt, maxIntervalMs);
+            safeSet("Netzwerkfehler, erneuter Versuch...", {});
+            await sleep(wait + Math.floor(Math.random() * 200));
+            continue;
           }
+
+          if (!resp.ok) {
+            // 5xx -> retry, 4xx -> abort
+            if (resp.status >= 500) {
+              attempt++;
+              const wait = Math.min(intervalMs * 2 ** attempt, maxIntervalMs);
+              safeSet(`Serverfehler ${resp.status}, erneut...`);
+              await sleep(wait + Math.floor(Math.random() * 200));
+              continue;
+            } else {
+              const txt = await resp.text().catch(() => resp.statusText || "");
+              safeSet("Fehler beim Abrufen: " + (txt || resp.status), {
+                error: true,
+              });
+              throw new Error(`HTTP ${resp.status}: ${txt}`);
+            }
+          }
+
+          let json;
+          try {
+            json = await resp.json();
+          } catch (err) {
+            safeSet("Ungültige Serverantwort", { error: true });
+            throw err;
+          }
+
+          // The endpoint returns a record; we check for completed === true
+          if (json && json.completed === true) {
+            // determine the value to insert (try common fields)
+            const value =
+              json.value ?? json.text ?? json.result ?? json.body ?? "";
+            const safe = sanitizeForDisplay(String(value || "(leere Antwort)"));
+            // insert into chat as bot message (formatted HTML)
+            const formatted = formatChatBotValueToHtml(
+              String(value || "(leere Antwort)")
+            );
+            if (placeholder && placeholder._progressEl) {
+              placeholder._progressEl.innerHTML = formatted;
+            } else if (placeholder) {
+              // replace text content with HTML
+              placeholder.innerHTML = formatted;
+            } else {
+              addBotMessageHtml(formatted);
+            }
+            liveStatus.textContent = "Fertig";
+            connectionStatus.textContent = "Bereit";
+            return value;
+          }
+
+          // Not completed yet — show progress if there's a partial value
+          const partial = json.value ?? json.partialText ?? json.text ?? null;
+          if (partial && partial !== lastValue) {
+            lastValue = partial;
+            safeSet(sanitizeForDisplay(String(partial)));
+          } else {
+            const dots = Math.floor((Date.now() / 400) % 4);
+            safeSet("Antwort wird generiert" + ".".repeat(dots));
+          }
+
+          // wait before next poll (with small jitter)
+          attempt = Math.max(0, attempt - 1);
+          const wait = Math.min(intervalMs * 2 ** attempt, maxIntervalMs);
+          await sleep(wait + Math.floor(Math.random() * 300));
+          attempt++;
         }
       }
       function sleep(ms) {
@@ -301,21 +373,84 @@
           (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
         );
       }
-      /* This is checking if the data exists in DynamoDB
-      async function checkApiHealth() {
-        try {
-          const resp = await fetch(API_BASE + "/health", { method: "GET" });
-          if (resp.ok) {
-            connectionStatus.textContent = "Verbunden";
-          } else {
-            connectionStatus.textContent = "Eingeschränkt";
-          }
-        } catch (e) {
-          connectionStatus.textContent = "Offline";
-        }
+
+      // Escape and simple formatter to convert raw text into safe HTML
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
+        );
       }
-      setInterval(checkApiHealth, 15000);
-      checkApiHealth();*/
+
+      function formatChatBotValueToHtml(raw) {
+        const esc = escapeHtml(raw || "");
+        const lines = esc.split(/\r?\n/);
+        let out = "";
+        let inUl = false,
+          inOl = false;
+
+        for (let line of lines) {
+          const trimmed = line.trim();
+          if (/^\d+\.\s+/.test(trimmed)) {
+            if (!inOl) {
+              if (inUl) {
+                out += "</ul>";
+                inUl = false;
+              }
+              out += "<ol>";
+              inOl = true;
+            }
+            out += "<li>" + trimmed.replace(/^\d+\.\s+/, "") + "</li>";
+          } else if (/^[-*]\s+/.test(trimmed)) {
+            if (!inUl) {
+              if (inOl) {
+                out += "</ol>";
+                inOl = false;
+              }
+              out += "<ul>";
+              inUl = true;
+            }
+            out += "<li>" + trimmed.replace(/^[-*]\s+/, "") + "</li>";
+          } else if (trimmed === "") {
+            if (inUl) {
+              out += "</ul>";
+              inUl = false;
+            }
+            if (inOl) {
+              out += "</ol>";
+              inOl = false;
+            }
+            out += "<p></p>";
+          } else {
+            if (inUl) {
+              out += "</ul>";
+              inUl = false;
+            }
+            if (inOl) {
+              out += "</ol>";
+              inOl = false;
+            }
+            out += "<p>" + trimmed + "</p>";
+          }
+        }
+        if (inUl) out += "</ul>";
+        if (inOl) out += "</ol>";
+
+        // bold **text** -> <strong>
+        out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        return out;
+      }
+
+      // Append a bot message that contains preformatted HTML (already escaped)
+      function addBotMessageHtml(html, opts = {}) {
+        const d = document.createElement("div");
+        d.className = "msg bot";
+        if (opts.error) d.classList.add("error");
+        d.innerHTML = html || "";
+        messagesEl.appendChild(d);
+        d.scrollIntoView({ behavior: "smooth", block: "end" });
+        return d;
+      }
       const qrBtn = document.getElementById("qrBtn");
       const qrModal = document.getElementById("qrModal");
       const overlay = document.getElementById("overlay");
@@ -334,8 +469,8 @@
         const hash = generateRandomHash(20);
         // Use your domain for the QR code and links. Use `sessionId` so camera.html can read it:
         currentQrUrl =
-          "https://byhack.tillseemann.com/camera.html?sessionId=" +
-          encodeURIComponent(hash);
+          "https://byhack.tillseemann.com/camera.html?sessionId=" + "abc123";
+        //encodeURIComponent(hash);
         renderQr(currentQrUrl);
         qrUrlEl.textContent = currentQrUrl;
         overlay.classList.add("show");
@@ -382,12 +517,38 @@
               closeQr();
               return;
             }
+            // Hardcoded polling endpoint as requested
             const resp = await fetch(
-              `/api/upload/status?sessionId=${encodeURIComponent(id)}`,
-              { method: "GET" }
+              `https://7iikuapjf5.execute-api.eu-central-1.amazonaws.com/Prod/response/abc123`,
+              { method: "GET", headers: { Accept: "application/json" } }
             );
-            if (resp.status === 200) {
+            if (!resp.ok) return; // wait for next poll
+            const json = await resp.json().catch(() => null);
+            if (!json) return;
+            // Response may be an array of records — find the last completed entry
+            let record = null;
+            if (Array.isArray(json)) {
+              for (let i = json.length - 1; i >= 0; i--) {
+                if (json[i] && json[i].completed === true) {
+                  record = json[i];
+                  break;
+                }
+              }
+              // fallback to last item if none marked completed yet
+              if (!record && json.length) record = json[json.length - 1];
+            } else {
+              record = json;
+            }
+
+            if (record && record.completed === true) {
+              // close the QR modal first
               closeQr();
+              // extract the value and insert as chatbot message (formatted)
+              const value = record.value ?? record.text ?? record.result ?? "";
+              const html = formatChatBotValueToHtml(
+                String(value || "(leere Antwort)")
+              );
+              addBotMessageHtml(html);
             }
           } catch (e) {
             // Optionally handle error
