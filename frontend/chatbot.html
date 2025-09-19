@@ -161,26 +161,30 @@
         liveStatus.textContent = "Sende...";
         connectionStatus.textContent = "Verbunden";
         try {
-          const postResp = await fetch(API_BASE + "/messages", {
+          // Call OpenRouter Llama 3 API directly
+          const resp = await fetch("http://localhost:3001/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "user", text }),
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "meta-llama/llama-3-8b-instruct", // or another Llama 3 model
+              messages: [
+                {
+                  role: "system",
+                  content: "Du bist ein hilfreicher Bürgerchat-Assistent.",
+                },
+                { role: "user", content: text },
+              ],
+            }),
           });
-          if (!postResp.ok) throw new Error("Serverfehler beim Senden");
-          const postJson = await postResp.json();
-          const messageId = postJson && (postJson.messageId || postJson.id);
-          if (!messageId)
-            throw new Error("Ungültige Server-Antwort (keine ID)");
-          liveStatus.textContent = "Antwort wird erstellt…";
-          const streamUrl =
-            API_BASE + "/messages/" + encodeURIComponent(messageId) + "/stream";
-          const supportsStream = await tryStream(streamUrl, placeholder);
-          if (!supportsStream) {
-            await pollForResult(
-              API_BASE + "/messages/" + encodeURIComponent(messageId),
-              placeholder
-            );
-          }
+          if (!resp.ok) throw new Error("Fehler vom OpenRouter-API");
+          const data = await resp.json();
+          const answer =
+            data.choices?.[0]?.message?.content || "(keine Antwort)";
+          placeholder._progressEl.textContent = sanitizeForDisplay(answer);
+          liveStatus.textContent = "Fertig";
+          connectionStatus.textContent = "Bereit";
         } catch (err) {
           placeholder.textContent = "Fehler: " + err.message;
           placeholder.classList.add("error");
@@ -297,6 +301,7 @@
           (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
         );
       }
+      /* This is checking if the data exists in DynamoDB
       async function checkApiHealth() {
         try {
           const resp = await fetch(API_BASE + "/health", { method: "GET" });
@@ -310,7 +315,7 @@
         }
       }
       setInterval(checkApiHealth, 15000);
-      checkApiHealth();
+      checkApiHealth();*/
       const qrBtn = document.getElementById("qrBtn");
       const qrModal = document.getElementById("qrModal");
       const overlay = document.getElementById("overlay");
