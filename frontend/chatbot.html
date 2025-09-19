@@ -1,474 +1,624 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Bürgerchat — Demo (Chat Agent)</title>
-<link rel="stylesheet" href="style.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-</head>
-<body>
-<div class="wrap" role="application">
-  <header>
-    <div style="width:36px;height:36px;border-radius:8px;background:white;color:var(--bav-royal);display:flex;align-items:center;justify-content:center;font-weight:700">BY</div>
-    <div class="title">Bürgerchat (Demo)</div>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-      <div id="connectionStatus" class="meta">Bereit</div>
-      <button id="qrBtn" class="qr-button" title="QR für Kamera öffnen">QR Kamera</button>
-    </div>
-  </header>
-  <main id="main">
-    <div class="messages" id="messages" aria-live="polite" aria-atomic="false">
-      <div class="msg bot" id="welcome">
-        <strong>Willkommen beim Bürgerchat (Demo)</strong>
-        <div class="hint">Stellen Sie Fragen zur Meldeänderung. Dieses Demo sendet Nachrichten an eine REST-API (konfigurierbar).</div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Bürgerchat — Demo (Chat Agent)</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  </head>
+  <body>
+    <div class="wrap" role="application">
+      <header>
+        <div
+          style="
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: white;
+            color: var(--bav-royal);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+          "
+        >
+          BY
+        </div>
+        <div class="title">Bürgerchat (Demo)</div>
+        <div
+          style="
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          "
+        >
+          <div id="connectionStatus" class="meta">Bereit</div>
+          <button id="qrBtn" class="qr-button" title="QR für Kamera öffnen">
+            QR Kamera
+          </button>
+        </div>
+      </header>
+      <main id="main">
+        <div
+          class="messages"
+          id="messages"
+          aria-live="polite"
+          aria-atomic="false"
+        >
+          <div class="msg bot" id="welcome">
+            <strong>Willkommen beim Bürgerchat (Demo)</strong>
+            <div class="hint">
+              Stellen Sie Fragen zur Meldeänderung. Dieses Demo sendet
+              Nachrichten an eine REST-API (konfigurierbar).
+            </div>
+          </div>
+        </div>
+      </main>
+      <div class="controls" role="region" aria-label="Chat controls">
+        <input
+          id="input"
+          type="text"
+          placeholder="Ihre Nachricht..."
+          aria-label="Ihre Nachricht"
+        />
+        <button id="sendBtn">Senden</button>
+        <button id="clearBtn" class="secondary" title="Chatverlauf löschen">
+          Löschen
+        </button>
+        <div id="liveStatus" class="status" aria-live="polite"></div>
       </div>
     </div>
-  </main>
-  <div class="controls" role="region" aria-label="Chat controls">
-    <input id="input" type="text" placeholder="Ihre Nachricht..." aria-label="Ihre Nachricht" />
-    <button id="sendBtn">Senden</button>
-    <button id="clearBtn" class="secondary" title="Chatverlauf löschen">Löschen</button>
-    <div id="liveStatus" class="status" aria-live="polite"></div>
-  </div>
-</div>
-<div id="overlay" class="overlay" tabindex="-1" aria-hidden="true"></div>
-<div id="qrModal" class="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qrTitle" aria-hidden="true">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <div id="qrTitle" style="font-weight:700">Kamera per QR öffnen</div>
-    <button id="qrClose" title="Schließen" class="secondary" style="background:transparent;color:var(--muted);border:none">✕</button>
-  </div>
-  <div class="qr-row" style="justify-content:center">
-    <div class="qr-canvas" id="qrCanvas" aria-hidden="true"></div>
-  </div>
-  <div class="qr-row">
-    <div class="qr-url" id="qrUrl" style="flex:1">—</div>
-  </div>
-  <div class="qr-actions">
-    <button id="copyBtn" class="secondary">Kopieren</button>
-    <button id="openBtn">Öffnen</button>
-  </div>
-</div>
-<script>
-const API_BASE = '/api';
-const POLL_INTERVAL_MS = 1200;
-const LONG_POLL_MS = 8000;
-const messagesEl = document.getElementById('messages');
-const inputEl = document.getElementById('input');
-const sendBtn = document.getElementById('sendBtn');
-const clearBtn = document.getElementById('clearBtn');
-const liveStatus = document.getElementById('liveStatus');
-const connectionStatus = document.getElementById('connectionStatus');
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
-clearBtn.addEventListener('click', () => { messagesEl.innerHTML=''; addBotMessage('Willkommen beim Bürgerchat (Demo)\nStellen Sie Fragen zur Meldeänderung.'); });
-function addUserMessage(text){
-  const d = document.createElement('div');
-  d.className = 'msg user';
-  d.textContent = text;
-  messagesEl.appendChild(d);
-  d.scrollIntoView({behavior:'smooth', block:'end'});
-}
-function addBotMessage(text, opts = {}){
-  const d = document.createElement('div');
-  d.className = 'msg bot';
-  if(opts.error) d.classList.add('error');
-  if(opts.progressive){
-    const code = document.createElement('div');
-    code.className = 'progressive';
-    code.textContent = '';
-    d.appendChild(code);
-    d._progressEl = code;
-  } else {
-    d.textContent = text;
-  }
-  messagesEl.appendChild(d);
-  d.scrollIntoView({behavior:'smooth', block:'end'});
-  return d;
-}
-async function sendMessage(){
-  const text = inputEl.value && inputEl.value.trim();
-  if(!text) return;
-  inputEl.value = '';
-  addUserMessage(text);
-  const placeholder = addBotMessage('', {progressive:true});
-  placeholder._progressEl.textContent = 'Antwort wird vorbereitet...';
-  liveStatus.textContent = 'Sende...';
-  connectionStatus.textContent = 'Verbunden';
-  try{
-    const postResp = await fetch(API_BASE + '/messages', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({role:'user', text})
-    });
-    if(!postResp.ok) throw new Error('Serverfehler beim Senden');
-    const postJson = await postResp.json();
-    const messageId = postJson && (postJson.messageId || postJson.id);
-    if(!messageId) throw new Error('Ungültige Server-Antwort (keine ID)');
-    liveStatus.textContent = 'Antwort wird erstellt…';
-    const streamUrl = API_BASE + '/messages/' + encodeURIComponent(messageId) + '/stream';
-    const supportsStream = await tryStream(streamUrl, placeholder);
-    if(!supportsStream){
-      await pollForResult(API_BASE + '/messages/' + encodeURIComponent(messageId), placeholder);
-    }
-  } catch(err){
-    placeholder.textContent = 'Fehler: ' + err.message;
-    placeholder.classList.add('error');
-    liveStatus.textContent = 'Fehler';
-    connectionStatus.textContent = 'Fehler';
-  }
-}
-async function tryStream(url, placeholder){
-  try{
-    const resp = await fetch(url, {method:'GET', headers:{'Accept':'text/event-stream'}});
-    if(!resp.ok) return false;
-    const contentType = resp.headers.get('Content-Type') || '';
-    if(!contentType.includes('text/event-stream') && !resp.body) return false;
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let lastUpdate = Date.now();
-    liveStatus.textContent = 'Streaming…';
-    connectionStatus.textContent = 'Streaming';
-    while(true){
-      const {done, value} = await reader.read();
-      if(done) break;
-      const chunk = decoder.decode(value, {stream:true});
-      buffer += chunk;
-      if(buffer.indexOf('\n') !== -1){
-        placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
-      } else {
-        placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
+    <div id="overlay" class="overlay" tabindex="-1" aria-hidden="true"></div>
+    <div
+      id="qrModal"
+      class="qr-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="qrTitle"
+      aria-hidden="true"
+    >
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
+        <div id="qrTitle" style="font-weight: 700">Kamera per QR öffnen</div>
+        <button
+          id="qrClose"
+          title="Schließen"
+          class="secondary"
+          style="background: transparent; color: var(--muted); border: none"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="qr-row" style="justify-content: center">
+        <div class="qr-canvas" id="qrCanvas" aria-hidden="true"></div>
+      </div>
+      <div class="qr-row">
+        <div class="qr-url" id="qrUrl" style="flex: 1">—</div>
+      </div>
+      <div class="qr-actions">
+        <button id="copyBtn" class="secondary">Kopieren</button>
+        <button id="openBtn">Öffnen</button>
+      </div>
+    </div>
+    <script>
+      const API_BASE = "/api";
+      const POLL_INTERVAL_MS = 1200;
+      const LONG_POLL_MS = 8000;
+      const messagesEl = document.getElementById("messages");
+      const inputEl = document.getElementById("input");
+      const sendBtn = document.getElementById("sendBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const liveStatus = document.getElementById("liveStatus");
+      const connectionStatus = document.getElementById("connectionStatus");
+      sendBtn.addEventListener("click", sendMessage);
+      inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendMessage();
+      });
+      clearBtn.addEventListener("click", () => {
+        messagesEl.innerHTML = "";
+        addBotMessage(
+          "Willkommen beim Bürgerchat (Demo)\nStellen Sie Fragen zur Meldeänderung."
+        );
+      });
+      function addUserMessage(text) {
+        const d = document.createElement("div");
+        d.className = "msg user";
+        d.textContent = text;
+        messagesEl.appendChild(d);
+        d.scrollIntoView({ behavior: "smooth", block: "end" });
       }
-      lastUpdate = Date.now();
-      placeholder.scrollIntoView({behavior:'smooth', block:'end'});
-    }
-    if(buffer && buffer.trim()){
-      placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
-    } else {
-      placeholder._progressEl.textContent = '(keine Antwort erhalten)';
-    }
-    liveStatus.textContent = 'Fertig';
-    connectionStatus.textContent = 'Bereit';
-    return true;
-  } catch(err){
-    return false;
-  }
-}
-async function pollForResult(url, placeholder){
-  let lastText = '';
-  let startedAt = Date.now();
-  const showSpinnerAfter = 1200;
-  while(true){
-    try{
-      const resp = await fetch(url, {method:'GET', headers:{'Accept':'application/json'}});
-      if(!resp.ok) throw new Error('Serverfehler beim Abfragen');
-      const json = await resp.json();
-      if(json.status === 'error'){
-        placeholder._progressEl.textContent = 'Fehler: ' + (json.error || 'Unbekannt');
-        placeholder.classList.add('error');
-        liveStatus.textContent = 'Fehler';
-        connectionStatus.textContent = 'Fehler';
-        return;
-      }
-      if(json.status === 'pending'){
-        const now = Date.now();
-        if(now - startedAt > showSpinnerAfter){
-          liveStatus.textContent = 'Generierung läuft…';
-          connectionStatus.textContent = 'Verarbeitung';
-        }
-        if(json.partialText && json.partialText !== lastText){
-          lastText = json.partialText;
-          placeholder._progressEl.textContent = sanitizeForDisplay(lastText);
+      function addBotMessage(text, opts = {}) {
+        const d = document.createElement("div");
+        d.className = "msg bot";
+        if (opts.error) d.classList.add("error");
+        if (opts.progressive) {
+          const code = document.createElement("div");
+          code.className = "progressive";
+          code.textContent = "";
+          d.appendChild(code);
+          d._progressEl = code;
         } else {
-          const dots = Math.floor(((Date.now()/400) % 4));
-          placeholder._progressEl.textContent = 'Antwort wird generiert' + '.'.repeat(dots);
+          d.textContent = text;
         }
-        await sleep(POLL_INTERVAL_MS);
-        continue;
+        messagesEl.appendChild(d);
+        d.scrollIntoView({ behavior: "smooth", block: "end" });
+        return d;
       }
-      if(json.status === 'complete'){
-        const text = json.text || json.result || '';
-        placeholder._progressEl.textContent = sanitizeForDisplay(text || '(leere Antwort)');
-        liveStatus.textContent = 'Fertig';
-        connectionStatus.textContent = 'Bereit';
-        return;
+      async function sendMessage() {
+        const text = inputEl.value && inputEl.value.trim();
+        if (!text) return;
+        inputEl.value = "";
+        addUserMessage(text);
+        const placeholder = addBotMessage("", { progressive: true });
+        placeholder._progressEl.textContent = "Antwort wird vorbereitet...";
+        liveStatus.textContent = "Sende...";
+        connectionStatus.textContent = "Verbunden";
+        try {
+          // Call OpenRouter Llama 3 API directly
+          const resp = await fetch("http://localhost:3001/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "meta-llama/llama-3-8b-instruct", // or another Llama 3 model
+              messages: [
+                {
+                  role: "system",
+                  content: "Du bist ein hilfreicher Bürgerchat-Assistent.",
+                },
+                { role: "user", content: text },
+              ],
+            }),
+          });
+          if (!resp.ok) throw new Error("Fehler vom OpenRouter-API");
+          const data = await resp.json();
+          const answer =
+            data.choices?.[0]?.message?.content || "(keine Antwort)";
+          placeholder._progressEl.textContent = sanitizeForDisplay(answer);
+          liveStatus.textContent = "Fertig";
+          connectionStatus.textContent = "Bereit";
+        } catch (err) {
+          placeholder.textContent = "Fehler: " + err.message;
+          placeholder.classList.add("error");
+          liveStatus.textContent = "Fehler";
+          connectionStatus.textContent = "Fehler";
+        }
       }
-      await sleep(POLL_INTERVAL_MS);
-    } catch(err){
-      placeholder._progressEl.textContent = 'Fehler beim Abrufen: ' + err.message;
-      placeholder.classList.add('error');
-      liveStatus.textContent = 'Fehler';
-      connectionStatus.textContent = 'Offline';
-      return;
-    }
-  }
-}
-function sleep(ms){ return new Promise(res=>setTimeout(res, ms)); }
-function sanitizeForDisplay(s){
-  if(!s) return '';
-  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-}
-async function checkApiHealth(){
-  try{
-    const resp = await fetch(API_BASE + '/health', {method:'GET'});
-    if(resp.ok){
-      connectionStatus.textContent = 'Verbunden';
-    } else {
-      connectionStatus.textContent = 'Eingeschränkt';
-    }
-  } catch(e){
-    connectionStatus.textContent = 'Offline';
-  }
-}
-setInterval(checkApiHealth, 15000);
-checkApiHealth();
-const qrBtn = document.getElementById('qrBtn');
-const qrModal = document.getElementById('qrModal');
-const overlay = document.getElementById('overlay');
-const qrCanvas = document.getElementById('qrCanvas');
-const qrUrlEl = document.getElementById('qrUrl');
-const qrClose = document.getElementById('qrClose');
-const copyBtn = document.getElementById('copyBtn');
-const openBtn = document.getElementById('openBtn');
-qrBtn.addEventListener('click', openQr);
-qrClose.addEventListener('click', closeQr);
-overlay.addEventListener('click', closeQr);
-copyBtn.addEventListener('click', copyUrl);
-openBtn.addEventListener('click', () => { window.open(currentQrUrl, '_blank'); });
-let currentQrUrl = '';
-let qrPollInterval = null;
-function openQr() {
-  const hash = generateRandomHash(20);
-  currentQrUrl = 'camera.html?id=' + encodeURIComponent(hash);
-  renderQr(currentQrUrl);
-  qrUrlEl.textContent = currentQrUrl;
-  overlay.classList.add('show');
-  overlay.setAttribute('aria-hidden', 'false');
-  qrModal.classList.add('show');
-  qrModal.setAttribute('aria-hidden', 'false');
-  qrClose.style.display = ''; // Show close button again
-  overlay.removeEventListener('click', closeQr);
-  // Start polling API
-  startQrPolling(hash);
-}
-qrClose.addEventListener('click', () => {
-  closeQr();
-  stopQrPolling();
-});
-
-function closeQr() {
-  overlay.classList.remove('show');
-  overlay.setAttribute('aria-hidden', 'true');
-  qrModal.classList.remove('show');
-  qrModal.setAttribute('aria-hidden', 'true');
-  qrCanvas.innerHTML = '';
-  qrUrlEl.textContent = '—';
-  currentQrUrl = '';
-  stopQrPolling(); // <-- Make sure polling is stopped
-}
-
-function startQrPolling(id) {
-  stopQrPolling();
-  const startTime = Date.now();
-  qrPollInterval = setInterval(async () => {
-    try {
-      const elapsed = Date.now() - startTime;
-      if (elapsed > 60000) { // 1 minute timeout
+      async function tryStream(url, placeholder) {
+        try {
+          const resp = await fetch(url, {
+            method: "GET",
+            headers: { Accept: "text/event-stream" },
+          });
+          if (!resp.ok) return false;
+          const contentType = resp.headers.get("Content-Type") || "";
+          if (!contentType.includes("text/event-stream") && !resp.body)
+            return false;
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let lastUpdate = Date.now();
+          liveStatus.textContent = "Streaming…";
+          connectionStatus.textContent = "Streaming";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            if (buffer.indexOf("\n") !== -1) {
+              placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
+            } else {
+              placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
+            }
+            lastUpdate = Date.now();
+            placeholder.scrollIntoView({ behavior: "smooth", block: "end" });
+          }
+          if (buffer && buffer.trim()) {
+            placeholder._progressEl.textContent = sanitizeForDisplay(buffer);
+          } else {
+            placeholder._progressEl.textContent = "(keine Antwort erhalten)";
+          }
+          liveStatus.textContent = "Fertig";
+          connectionStatus.textContent = "Bereit";
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+      async function pollForResult(url, placeholder) {
+        let lastText = "";
+        let startedAt = Date.now();
+        const showSpinnerAfter = 1200;
+        while (true) {
+          try {
+            const resp = await fetch(url, {
+              method: "GET",
+              headers: { Accept: "application/json" },
+            });
+            if (!resp.ok) throw new Error("Serverfehler beim Abfragen");
+            const json = await resp.json();
+            if (json.status === "error") {
+              placeholder._progressEl.textContent =
+                "Fehler: " + (json.error || "Unbekannt");
+              placeholder.classList.add("error");
+              liveStatus.textContent = "Fehler";
+              connectionStatus.textContent = "Fehler";
+              return;
+            }
+            if (json.status === "pending") {
+              const now = Date.now();
+              if (now - startedAt > showSpinnerAfter) {
+                liveStatus.textContent = "Generierung läuft…";
+                connectionStatus.textContent = "Verarbeitung";
+              }
+              if (json.partialText && json.partialText !== lastText) {
+                lastText = json.partialText;
+                placeholder._progressEl.textContent =
+                  sanitizeForDisplay(lastText);
+              } else {
+                const dots = Math.floor((Date.now() / 400) % 4);
+                placeholder._progressEl.textContent =
+                  "Antwort wird generiert" + ".".repeat(dots);
+              }
+              await sleep(POLL_INTERVAL_MS);
+              continue;
+            }
+            if (json.status === "complete") {
+              const text = json.text || json.result || "";
+              placeholder._progressEl.textContent = sanitizeForDisplay(
+                text || "(leere Antwort)"
+              );
+              liveStatus.textContent = "Fertig";
+              connectionStatus.textContent = "Bereit";
+              return;
+            }
+            await sleep(POLL_INTERVAL_MS);
+          } catch (err) {
+            placeholder._progressEl.textContent =
+              "Fehler beim Abrufen: " + err.message;
+            placeholder.classList.add("error");
+            liveStatus.textContent = "Fehler";
+            connectionStatus.textContent = "Offline";
+            return;
+          }
+        }
+      }
+      function sleep(ms) {
+        return new Promise((res) => setTimeout(res, ms));
+      }
+      function sanitizeForDisplay(s) {
+        if (!s) return "";
+        return s.replace(
+          /[&<>]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])
+        );
+      }
+      /* This is checking if the data exists in DynamoDB
+      async function checkApiHealth() {
+        try {
+          const resp = await fetch(API_BASE + "/health", { method: "GET" });
+          if (resp.ok) {
+            connectionStatus.textContent = "Verbunden";
+          } else {
+            connectionStatus.textContent = "Eingeschränkt";
+          }
+        } catch (e) {
+          connectionStatus.textContent = "Offline";
+        }
+      }
+      setInterval(checkApiHealth, 15000);
+      checkApiHealth();*/
+      const qrBtn = document.getElementById("qrBtn");
+      const qrModal = document.getElementById("qrModal");
+      const overlay = document.getElementById("overlay");
+      const qrCanvas = document.getElementById("qrCanvas");
+      const qrUrlEl = document.getElementById("qrUrl");
+      const qrClose = document.getElementById("qrClose");
+      const copyBtn = document.getElementById("copyBtn");
+      const openBtn = document.getElementById("openBtn");
+      qrBtn.addEventListener("click", openQr);
+      qrClose.addEventListener("click", closeQr);
+      overlay.addEventListener("click", closeQr);
+      copyBtn.addEventListener("click", copyUrl);
+      let currentQrUrl = "";
+      let qrPollInterval = null;
+      function openQr() {
+        const hash = generateRandomHash(20);
+        // Use your domain for the QR code and links:
+        currentQrUrl =
+          "http://ai-in-form-aiinformw-458650368656.s3-website.eu-central-1.amazonaws.com/camera.html?id=" +
+          encodeURIComponent(hash);
+        renderQr(currentQrUrl);
+        qrUrlEl.textContent = currentQrUrl;
+        overlay.classList.add("show");
+        overlay.setAttribute("aria-hidden", "false");
+        qrModal.classList.add("show");
+        qrModal.setAttribute("aria-hidden", "false");
+        qrClose.style.display = ""; // Show close button again
+        overlay.removeEventListener("click", closeQr);
+        // Start polling API
+        startQrPolling(hash);
+      }
+      copyBtn.addEventListener("click", copyUrl);
+      openBtn.addEventListener("click", () => {
+        if (currentQrUrl) window.open(currentQrUrl, "_blank");
+      });
+      qrClose.addEventListener("click", () => {
+        closeQr();
         stopQrPolling();
-        alert('QR-Code wurde nicht verwendet. Bitte versuchen Sie es erneut.');
-        closeQr();
-        return;
-      }
-      const resp = await fetch(`/api/upload/status?id=${encodeURIComponent(id)}`, { method: 'GET' });
-      if (resp.status === 200) {
-        closeQr();
-      }
-    } catch (e) {
-      // Optionally handle error
-    }
-  }, 5000);
-}
+      });
 
-function stopQrPolling() {
-  if (qrPollInterval) {
-    clearInterval(qrPollInterval);
-    qrPollInterval = null;
-  }
-}
-function copyUrl(){
-  if(!currentQrUrl) return;
-  navigator.clipboard?.writeText(currentQrUrl).then(()=> {
-    copyBtn.textContent = 'Kopiert';
-    setTimeout(()=> copyBtn.textContent = 'Kopieren', 1500);
-  }).catch(()=> {
-    try{
-      const t = document.createElement('textarea');
-      t.value = currentQrUrl;
-      document.body.appendChild(t);
-      t.select();
-      document.execCommand('copy');
-      document.body.removeChild(t);
-      copyBtn.textContent = 'Kopiert';
-      setTimeout(()=> copyBtn.textContent = 'Kopieren', 1500);
-    } catch(e){
-      copyBtn.textContent = 'Fehler';
-      setTimeout(()=> copyBtn.textContent = 'Kopieren', 1500);
-    }
-  });
-}
-function generateRandomHash(len){
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const arr = new Uint8Array(len);
-  window.crypto.getRandomValues(arr);
-  let out = '';
-  for(let i=0;i<len;i++){
-    out += chars[arr[i] % chars.length];
-  }
-  return out;
-}
-function renderQr(text) {
-  qrCanvas.innerHTML = '';
-  const qr = new QRCode(qrCanvas, {
-    text: text,
-    width: 220,
-    height: 220,
-    colorDark: "#000000",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.H
-  });
-}
-function qrcodeGenerator(text, opts){
-  try {
-    tinyQR(text, opts.canvas, opts.size);
-  } catch(e){
-    opts.canvas.getContext('2d').fillStyle = '#fff';
-    opts.canvas.getContext('2d').fillRect(0,0,opts.size,opts.size);
-    opts.canvas.getContext('2d').fillStyle = '#000';
-    opts.canvas.getContext('2d').font = '12px monospace';
-    opts.canvas.getContext('2d').fillText(text,8,20);
-  }
-}
-function tinyQR(text, canvas, size){
-  const qr = generateQRSvg(text);
-  const img = new Image();
-  img.onload = function(){
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0,0,size,size);
-    ctx.drawImage(img, 0, 0, size, size);
-  };
-  img.onerror = function(){
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0,0,size,size);
-    ctx.fillStyle = '#000';
-    ctx.font = '12px monospace';
-    wrapText(ctx, text, 8, 20, size-16, 14);
-  };
-  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(qr);
-}
-function wrapText(ctx, text, x, y, maxWidth, lineHeight){
-  const words = text.split(' ');
-  let line = '';
-  for(let n=0;n<words.length;n++){
-    const testLine = line + words[n] + ' ';
-    const metrics = ctx.measureText(testLine);
-    if(metrics.width > maxWidth && n > 0){
-      ctx.fillText(line, x, y);
-      line = words[n] + ' ';
-      y += lineHeight;
-    } else {
-      line = testLine;
-    }
-  }
-  ctx.fillText(line, x, y);
-}
-function generateQRSvg(text){
-  const size = 200;
-  const modules = simpleQrMatrixFromText(text, 33);
-  const moduleSize = Math.floor(size / modules.length);
-  const viewSize = moduleSize * modules.length;
-  let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + viewSize + '" height="' + viewSize + '" viewBox="0 0 ' + viewSize + ' ' + viewSize + '">';
-  svg += '<rect width="100%" height="100%" fill="#fff"/>';
-  svg += '<g fill="#000">';
-  for(let y=0;y<modules.length;y++){
-    for(let x=0;x<modules.length;x++){
-      if(modules[y][x]){
-        svg += '<rect x="' + (x*moduleSize) + '" y="' + (y*moduleSize) + '" width="' + moduleSize + '" height="' + moduleSize + '"/>';
+      function closeQr() {
+        overlay.classList.remove("show");
+        overlay.setAttribute("aria-hidden", "true");
+        qrModal.classList.remove("show");
+        qrModal.setAttribute("aria-hidden", "true");
+        qrCanvas.innerHTML = "";
+        qrUrlEl.textContent = "—";
+        currentQrUrl = "";
+        stopQrPolling(); // <-- Make sure polling is stopped
       }
-    }
-  }
-  svg += '</g></svg>';
-  return svg;
-}
-function simpleQrMatrixFromText(text, size){
-  const n = size;
-  const m = Array.from({length:n}, ()=>Array(n).fill(false));
-  function placeFinder(r,c){
-    const p = [
-      [1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,1,1,1,0,1],
-      [1,0,0,0,0,0,1],
-      [1,1,1,1,1,1,1]
-    ];
-    for(let y=0;y<7;y++) for(let x=0;x<7;x++) {
-      if(r+y<n && c+x<n) m[r+y][c+x] = !!p[y][x];
-    }
-  }
-  placeFinder(0,0);
-  placeFinder(0,n-7);
-  placeFinder(n-7,0);
-  const hash = sha256Array(text);
-  let bitIndex = 0;
-  for(let y=0;y<n;y++){
-    for(let x=0;x<n;x++){
-      if((y<7 && x<7) || (y<7 && x>=n-7) || (y>=n-7 && x<7)) continue;
-      const byte = hash[Math.floor(bitIndex/8) % hash.length];
-      const bit = (byte >> (bitIndex % 8)) & 1;
-      m[y][x] = !!bit;
-      bitIndex++;
-    }
-  }
-  return m;
-}
-function sha256Array(str){
-  if(window.crypto && crypto.subtle){
-  }
-  function rightRotate(n, x){ return (x>>>n) | (x<<(32-n)); }
-  function toBytes(s){
-    const bytes = [];
-    for(let i=0;i<s.length;i++){
-      const code = s.charCodeAt(i);
-      if(code < 0x80) bytes.push(code);
-      else if(code < 0x800){ bytes.push(0xc0 | (code>>6), 0x80 | (code & 0x3f)); }
-      else if(code < 0xd800 || code >= 0xe000){ bytes.push(0xe0 | (code>>12), 0x80 | ((code>>6) & 0x3f), 0x80 | (code & 0x3f)); }
-      else {
-        i++;
-        const codePoint = 0x10000 + (((code & 0x3ff) <<10) | (s.charCodeAt(i) & 0x3ff));
-        bytes.push(0xf0 | (codePoint>>18), 0x80 | ((codePoint>>12)&0x3f), 0x80 | ((codePoint>>6)&0x3f), 0x80 | (codePoint & 0x3f));
+
+      function startQrPolling(id) {
+        stopQrPolling();
+        const startTime = Date.now();
+        qrPollInterval = setInterval(async () => {
+          try {
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 60000) {
+              // 1 minute timeout
+              stopQrPolling();
+              alert(
+                "QR-Code wurde nicht verwendet. Bitte versuchen Sie es erneut."
+              );
+              closeQr();
+              return;
+            }
+            const resp = await fetch(
+              `/api/upload/status?id=${encodeURIComponent(id)}`,
+              { method: "GET" }
+            );
+            if (resp.status === 200) {
+              closeQr();
+            }
+          } catch (e) {
+            // Optionally handle error
+          }
+        }, 5000);
       }
-    }
-    return bytes;
-  }
-  const K = [1116352408,3609767458,1899447441,602891725,3049323471,3964484399,3921009573,2173295548,
-    2488955582,
-  ];
-  const bytes = toBytes(str);
-  const out = new Uint8Array(32);
-  for(let i=0;i<bytes.length;i++){
-    out[i%32] = (out[i%32] + bytes[i] + ((i*131) & 0xff)) & 0xff;
-  }
-  for(let j=0;j<64;j++){
-    for(let i=0;i<32;i++){
-      out[i] = (out[i] ^ ((out[(i+1)%32] + out[(i+7)%32]) & 0xff)) & 0xff;
-    }
-  }
-  return out;
-}
-</script>
-</body>
+
+      function stopQrPolling() {
+        if (qrPollInterval) {
+          clearInterval(qrPollInterval);
+          qrPollInterval = null;
+        }
+      }
+      function copyUrl() {
+        if (!currentQrUrl) return;
+        navigator.clipboard
+          ?.writeText(currentQrUrl)
+          .then(() => {
+            copyBtn.textContent = "Kopiert";
+            setTimeout(() => (copyBtn.textContent = "Kopieren"), 1500);
+          })
+          .catch(() => {
+            try {
+              const t = document.createElement("textarea");
+              t.value = currentQrUrl;
+              document.body.appendChild(t);
+              t.select();
+              document.execCommand("copy");
+              document.body.removeChild(t);
+              copyBtn.textContent = "Kopiert";
+              setTimeout(() => (copyBtn.textContent = "Kopieren"), 1500);
+            } catch (e) {
+              copyBtn.textContent = "Fehler";
+              setTimeout(() => (copyBtn.textContent = "Kopieren"), 1500);
+            }
+          });
+      }
+      function generateRandomHash(len) {
+        const chars =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        const arr = new Uint8Array(len);
+        window.crypto.getRandomValues(arr);
+        let out = "";
+        for (let i = 0; i < len; i++) {
+          out += chars[arr[i] % chars.length];
+        }
+        return out;
+      }
+      function renderQr(text) {
+        qrCanvas.innerHTML = "";
+        const qr = new QRCode(qrCanvas, {
+          text: text,
+          width: 220,
+          height: 220,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+      }
+      function qrcodeGenerator(text, opts) {
+        try {
+          tinyQR(text, opts.canvas, opts.size);
+        } catch (e) {
+          opts.canvas.getContext("2d").fillStyle = "#fff";
+          opts.canvas.getContext("2d").fillRect(0, 0, opts.size, opts.size);
+          opts.canvas.getContext("2d").fillStyle = "#000";
+          opts.canvas.getContext("2d").font = "12px monospace";
+          opts.canvas.getContext("2d").fillText(text, 8, 20);
+        }
+      }
+      function tinyQR(text, canvas, size) {
+        const qr = generateQRSvg(text);
+        const img = new Image();
+        img.onload = function () {
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, size, size);
+          ctx.drawImage(img, 0, 0, size, size);
+        };
+        img.onerror = function () {
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, size, size);
+          ctx.fillStyle = "#000";
+          ctx.font = "12px monospace";
+          wrapText(ctx, text, 8, 20, size - 16, 14);
+        };
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(qr);
+      }
+      function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(" ");
+        let line = "";
+        for (let n = 0; n < words.length; n++) {
+          const testLine = line + words[n] + " ";
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > maxWidth && n > 0) {
+            ctx.fillText(line, x, y);
+            line = words[n] + " ";
+            y += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillText(line, x, y);
+      }
+      function generateQRSvg(text) {
+        const size = 200;
+        const modules = simpleQrMatrixFromText(text, 33);
+        const moduleSize = Math.floor(size / modules.length);
+        const viewSize = moduleSize * modules.length;
+        let svg =
+          '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+          viewSize +
+          '" height="' +
+          viewSize +
+          '" viewBox="0 0 ' +
+          viewSize +
+          " " +
+          viewSize +
+          '">';
+        svg += '<rect width="100%" height="100%" fill="#fff"/>';
+        svg += '<g fill="#000">';
+        for (let y = 0; y < modules.length; y++) {
+          for (let x = 0; x < modules.length; x++) {
+            if (modules[y][x]) {
+              svg +=
+                '<rect x="' +
+                x * moduleSize +
+                '" y="' +
+                y * moduleSize +
+                '" width="' +
+                moduleSize +
+                '" height="' +
+                moduleSize +
+                '"/>';
+            }
+          }
+        }
+        svg += "</g></svg>";
+        return svg;
+      }
+      function simpleQrMatrixFromText(text, size) {
+        const n = size;
+        const m = Array.from({ length: n }, () => Array(n).fill(false));
+        function placeFinder(r, c) {
+          const p = [
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1],
+          ];
+          for (let y = 0; y < 7; y++)
+            for (let x = 0; x < 7; x++) {
+              if (r + y < n && c + x < n) m[r + y][c + x] = !!p[y][x];
+            }
+        }
+        placeFinder(0, 0);
+        placeFinder(0, n - 7);
+        placeFinder(n - 7, 0);
+        const hash = sha256Array(text);
+        let bitIndex = 0;
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            if (
+              (y < 7 && x < 7) ||
+              (y < 7 && x >= n - 7) ||
+              (y >= n - 7 && x < 7)
+            )
+              continue;
+            const byte = hash[Math.floor(bitIndex / 8) % hash.length];
+            const bit = (byte >> bitIndex % 8) & 1;
+            m[y][x] = !!bit;
+            bitIndex++;
+          }
+        }
+        return m;
+      }
+      function sha256Array(str) {
+        if (window.crypto && crypto.subtle) {
+        }
+        function rightRotate(n, x) {
+          return (x >>> n) | (x << (32 - n));
+        }
+        function toBytes(s) {
+          const bytes = [];
+          for (let i = 0; i < s.length; i++) {
+            const code = s.charCodeAt(i);
+            if (code < 0x80) bytes.push(code);
+            else if (code < 0x800) {
+              bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+            } else if (code < 0xd800 || code >= 0xe000) {
+              bytes.push(
+                0xe0 | (code >> 12),
+                0x80 | ((code >> 6) & 0x3f),
+                0x80 | (code & 0x3f)
+              );
+            } else {
+              i++;
+              const codePoint =
+                0x10000 + (((code & 0x3ff) << 10) | (s.charCodeAt(i) & 0x3ff));
+              bytes.push(
+                0xf0 | (codePoint >> 18),
+                0x80 | ((codePoint >> 12) & 0x3f),
+                0x80 | ((codePoint >> 6) & 0x3f),
+                0x80 | (codePoint & 0x3f)
+              );
+            }
+          }
+          return bytes;
+        }
+        const K = [
+          1116352408, 3609767458, 1899447441, 602891725, 3049323471, 3964484399,
+          3921009573, 2173295548, 2488955582,
+        ];
+        const bytes = toBytes(str);
+        const out = new Uint8Array(32);
+        for (let i = 0; i < bytes.length; i++) {
+          out[i % 32] = (out[i % 32] + bytes[i] + ((i * 131) & 0xff)) & 0xff;
+        }
+        for (let j = 0; j < 64; j++) {
+          for (let i = 0; i < 32; i++) {
+            out[i] =
+              (out[i] ^ ((out[(i + 1) % 32] + out[(i + 7) % 32]) & 0xff)) &
+              0xff;
+          }
+        }
+        return out;
+      }
+    </script>
+  </body>
 </html>

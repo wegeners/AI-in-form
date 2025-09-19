@@ -1,205 +1,332 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Meldeänderung - Bayerisches Bürgerportal (Demo)</title>
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
-<header>
-  <div class="logo" aria-hidden>
-    <div class="crest">BY</div>
-    <div>
-      <div style="font-size:15px">Bayerisches Bürgerportal</div>
-      <div style="font-size:12px;opacity:0.9">Demo (Statisches Mockup)</div>
-    </div>
-  </div>
-  <div class="meta">
-    <div>Service: <strong>Meldeänderung</strong></div>
-    <div style="font-size:12px;margin-top:6px">Öffnungszeiten: Mo–Fr, 08:00–16:00</div>
-  </div>
-</header>
-
-<main>
-  <div class="grid">
-    <section class="card" aria-labelledby="main-title">
-      <h1 id="main-title">Meldeänderung — Anmeldung/Abmeldung der Wohnanschrift</h1>
-      <p class="lead">Füllen Sie das Formular aus, um Ihren aktuellen Wohnsitz im Melderegister zu ändern. Dies ist ein statisches Demo-Formular und wird nicht versendet.</p>
-
-      <div class="notice" role="status">
-        <strong>Hinweis:</strong> Für gültige Anträge verwenden Sie bitte das echte Bürgerportal Ihrer Stadt oder Gemeinde. Dieses Demo-Formular speichert keine Daten.
-      </div>
-
-      <form id="address-form" onsubmit="return handleSubmit(event)" autocomplete="off" novalidate>
-        <fieldset>
-          <legend>Persönliche Daten</legend>
-          <div class="row">
-            <div>
-              <label for="given">Vorname</label>
-              <input id="given" name="given" type="text" placeholder="Max" required />
-            </div>
-            <div>
-              <label for="family">Nachname</label>
-              <input id="family" name="family" type="text" placeholder="Mustermann" required />
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="birth">Geburtsdatum</label>
-              <input id="birth" name="birth" type="date" />
-            </div>
-            <div>
-              <label for="email">E-Mail (optional)</label>
-              <input id="email" name="email" type="email" placeholder="name@example.de" />
-            </div>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Alte Anschrift</legend>
-          <label for="old-street">Straße & Hausnummer</label>
-          <input id="old-street" name="old-street" type="text" placeholder="Hauptstraße 12" />
-
-          <div class="row" style="margin-top:8px">
-            <div>
-              <label for="old-zip">Postleitzahl</label>
-              <input id="old-zip" name="old-zip" type="text" placeholder="80331" />
-            </div>
-            <div>
-              <label for="old-city">Ort</label>
-              <input id="old-city" name="old-city" type="text" placeholder="München" />
-            </div>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Neue Anschrift</legend>
-          <label for="new-street">Straße & Hausnummer</label>
-          <input id="new-street" name="new-street" type="text" placeholder="Beispielweg 3" required />
-
-          <div class="row" style="margin-top:8px">
-            <div>
-              <label for="new-zip">Postleitzahl</label>
-              <input id="new-zip" name="new-zip" type="text" placeholder="80331" required />
-            </div>
-            <div>
-              <label for="new-city">Ort</label>
-              <input id="new-city" name="new-city" type="text" placeholder="München" required />
-            </div>
-          </div>
-
-          <label for="move-date" style="margin-top:8px">Einzugsdatum</label>
-          <input id="move-date" name="move-date" type="date" />
-
-          <label for="comments" style="margin-top:8px">Bemerkungen (optional)</label>
-          <textarea id="comments" name="comments" placeholder="z. B. zusätzliche Informationen"></textarea>
-        </fieldset>
-
-        <div class="actions">
-          <button type="submit" class="btn">Formular prüfen</button>
-          <button type="button" class="btn secondary" onclick="resetForm()">Zurücksetzen</button>
-          <div style="margin-left:auto" class="small">Antragstyp: <strong>Online (Demo)</strong></div>
-        </div>
-      </form>
-
-      <div id="result" style="margin-top:14px;display:none"></div>
-    </section>
-
-    <aside class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Meldeänderung - Bayerisches Bürgerportal (Demo)</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo" aria-hidden>
+        <div class="crest">BY</div>
         <div>
-          <h3 style="margin:0;font-size:16px">Welche Unterlagen?</h3>
-          <div class="small">Übersicht für die Meldestelle</div>
+          <div style="font-size: 15px">Bayerisches Bürgerportal</div>
+          <div style="font-size: 12px; opacity: 0.9">
+            Demo (Statisches Mockup)
+          </div>
         </div>
       </div>
-
-      <div style="margin-top:12px" class="help">
-        <ul class="doc-list">
-          <li><strong>Personalausweis oder Reisepass</strong></li>
-          <li>Mietvertrag oder Wohnungsgeberbestätigung</li>
-          <li>ggf. Heiratsurkunde / Geburtsurkunde</li>
-        </ul>
+      <div class="meta">
+        <div>Service: <strong>Meldeänderung</strong></div>
+        <div style="font-size: 12px; margin-top: 6px">
+          Öffnungszeiten: Mo–Fr, 08:00–16:00
+        </div>
       </div>
+    </header>
 
-      <div style="margin-top:14px" class="card small" aria-hidden>
-        <strong>Öffnungszeiten</strong>
-        <div style="margin-top:8px">Mo–Fr: 08:00–16:00</div>
-        <div style="margin-top:8px">Telefon: 089 / 123-4567</div>
+    <main>
+      <div class="grid">
+        <section class="card" aria-labelledby="main-title">
+          <h1 id="main-title">
+            Meldeänderung — Anmeldung/Abmeldung der Wohnanschrift
+          </h1>
+          <p class="lead">
+            Füllen Sie das Formular aus, um Ihren aktuellen Wohnsitz im
+            Melderegister zu ändern. Dies ist ein statisches Demo-Formular und
+            wird nicht versendet.
+          </p>
+
+          <div class="notice" role="status">
+            <strong>Hinweis:</strong> Für gültige Anträge verwenden Sie bitte
+            das echte Bürgerportal Ihrer Stadt oder Gemeinde. Dieses
+            Demo-Formular speichert keine Daten.
+          </div>
+
+          <form
+            id="address-form"
+            onsubmit="return handleSubmit(event)"
+            autocomplete="off"
+            novalidate
+          >
+            <fieldset>
+              <legend>Persönliche Daten</legend>
+              <div class="row">
+                <div>
+                  <label for="given">Vorname</label>
+                  <input
+                    id="given"
+                    name="given"
+                    type="text"
+                    placeholder="Max"
+                    required
+                  />
+                </div>
+                <div>
+                  <label for="family">Nachname</label>
+                  <input
+                    id="family"
+                    name="family"
+                    type="text"
+                    placeholder="Mustermann"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="birth">Geburtsdatum</label>
+                  <input id="birth" name="birth" type="date" />
+                </div>
+                <div>
+                  <label for="email">E-Mail (optional)</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="name@example.de"
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Alte Anschrift</legend>
+              <label for="old-street">Straße & Hausnummer</label>
+              <input
+                id="old-street"
+                name="old-street"
+                type="text"
+                placeholder="Hauptstraße 12"
+              />
+
+              <div class="row" style="margin-top: 8px">
+                <div>
+                  <label for="old-zip">Postleitzahl</label>
+                  <input
+                    id="old-zip"
+                    name="old-zip"
+                    type="text"
+                    placeholder="80331"
+                  />
+                </div>
+                <div>
+                  <label for="old-city">Ort</label>
+                  <input
+                    id="old-city"
+                    name="old-city"
+                    type="text"
+                    placeholder="München"
+                  />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Neue Anschrift</legend>
+              <label for="new-street">Straße & Hausnummer</label>
+              <input
+                id="new-street"
+                name="new-street"
+                type="text"
+                placeholder="Beispielweg 3"
+                required
+              />
+
+              <div class="row" style="margin-top: 8px">
+                <div>
+                  <label for="new-zip">Postleitzahl</label>
+                  <input
+                    id="new-zip"
+                    name="new-zip"
+                    type="text"
+                    placeholder="80331"
+                    required
+                  />
+                </div>
+                <div>
+                  <label for="new-city">Ort</label>
+                  <input
+                    id="new-city"
+                    name="new-city"
+                    type="text"
+                    placeholder="München"
+                    required
+                  />
+                </div>
+              </div>
+
+              <label for="move-date" style="margin-top: 8px"
+                >Einzugsdatum</label
+              >
+              <input id="move-date" name="move-date" type="date" />
+
+              <label for="comments" style="margin-top: 8px"
+                >Bemerkungen (optional)</label
+              >
+              <textarea
+                id="comments"
+                name="comments"
+                placeholder="z. B. zusätzliche Informationen"
+              ></textarea>
+            </fieldset>
+
+            <div class="actions">
+              <button type="submit" class="btn">Formular prüfen</button>
+              <button type="button" class="btn secondary" onclick="resetForm()">
+                Zurücksetzen
+              </button>
+              <div style="margin-left: auto" class="small">
+                Antragstyp: <strong>Online (Demo)</strong>
+              </div>
+            </div>
+          </form>
+
+          <div id="result" style="margin-top: 14px; display: none"></div>
+        </section>
+
+        <aside class="card">
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+            "
+          >
+            <div>
+              <h3 style="margin: 0; font-size: 16px">Welche Unterlagen?</h3>
+              <div class="small">Übersicht für die Meldestelle</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 12px" class="help">
+            <ul class="doc-list">
+              <li><strong>Personalausweis oder Reisepass</strong></li>
+              <li>Mietvertrag oder Wohnungsgeberbestätigung</li>
+              <li>ggf. Heiratsurkunde / Geburtsurkunde</li>
+            </ul>
+          </div>
+
+          <div style="margin-top: 14px" class="card small" aria-hidden>
+            <strong>Öffnungszeiten</strong>
+            <div style="margin-top: 8px">Mo–Fr: 08:00–16:00</div>
+            <div style="margin-top: 8px">Telefon: 089 / 123-4567</div>
+          </div>
+
+          <div style="margin-top: 12px">
+            <a href="#" onclick="alert('Dies ist ein Demo-Link.');return false"
+              >Anleitungen & Formulare (Demo)</a
+            >
+          </div>
+        </aside>
       </div>
+    </main>
 
-      <div style="margin-top:12px">
-        <a href="#" onclick="alert('Dies ist ein Demo-Link.');return false">Anleitungen & Formulare (Demo)</a>
+    <footer>
+      <div>
+        © Land Bayern — Demo. Diese Seite ist ein statisches Mockup und stellt
+        kein offizielles Formular dar.
       </div>
-    </aside>
-  </div>
-</main>
+    </footer>
 
-<footer>
-  <div>© Land Bayern — Demo. Diese Seite ist ein statisches Mockup und stellt kein offizielles Formular dar.</div>
-</footer>
+    <div class="chat-iframe" aria-label="Chatbot">
+      <iframe
+        src="chatbot.html"
+        title="Bürgerchat"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+      ></iframe>
+    </div>
 
-<div class="chat-iframe" aria-label="Chatbot">
-  <iframe src="chatbot.html" title="Bürgerchat" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-</div>
+    <script>
+      function qs(id) {
+        return document.getElementById(id);
+      }
+      function resetForm() {
+        qs("address-form").reset();
+        qs("result").style.display = "none";
+        clearErrors();
+      }
+      function clearErrors() {
+        var els = document.querySelectorAll(".error");
+        els.forEach((e) => e.classList.remove("error"));
+      }
 
-<script>
-  function qs(id){return document.getElementById(id)}
-  function resetForm(){
-    qs('address-form').reset();
-    qs('result').style.display='none';
-    clearErrors();
-  }
-  function clearErrors(){
-    var els = document.querySelectorAll('.error');
-    els.forEach(e=>e.classList.remove('error'));
-  }
+      function handleSubmit(e) {
+        e.preventDefault();
+        clearErrors();
+        var required = ["given", "family", "new-street", "new-zip", "new-city"];
+        var missing = [];
+        required.forEach(function (id) {
+          var el = qs(id);
+          if (!el.value || el.value.trim() === "") {
+            missing.push(id);
+            el.classList.add("error");
+          }
+        });
+        var result = qs("result");
+        if (missing.length) {
+          result.style.display = "block";
+          result.className = "card";
+          result.innerHTML =
+            '<div style="color:var(--danger);font-weight:700">Bitte füllen Sie alle Pflichtfelder aus.</div>';
+          result.scrollIntoView({ behavior: "smooth", block: "center" });
+          return false;
+        }
 
-  function handleSubmit(e){
-    e.preventDefault();
-    clearErrors();
-    var required = ['given','family','new-street','new-zip','new-city'];
-    var missing = [];
-    required.forEach(function(id){
-      var el = qs(id);
-      if(!el.value || el.value.trim()===''){ missing.push(id); el.classList.add('error'); }
-    });
-    var result = qs('result');
-    if(missing.length){
-      result.style.display='block';
-      result.className='card';
-      result.innerHTML = '<div style="color:var(--danger);font-weight:700">Bitte füllen Sie alle Pflichtfelder aus.</div>';
-      result.scrollIntoView({behavior:'smooth',block:'center'});
-      return false;
-    }
+        var summary = {
+          vorname: qs("given").value,
+          nachname: qs("family").value,
+          alt:
+            qs("old-street").value +
+            ", " +
+            qs("old-zip").value +
+            " " +
+            qs("old-city").value,
+          neu:
+            qs("new-street").value +
+            ", " +
+            qs("new-zip").value +
+            " " +
+            qs("new-city").value,
+          einzugsdatum: qs("move-date").value || "—",
+        };
 
-    var summary = {
-      vorname: qs('given').value,
-      nachname: qs('family').value,
-      alt: qs('old-street').value + ', ' + qs('old-zip').value + ' ' + qs('old-city').value,
-      neu: qs('new-street').value + ', ' + qs('new-zip').value + ' ' + qs('new-city').value,
-      einzugsdatum: qs('move-date').value || '—'
-    };
+        result.style.display = "block";
+        result.className = "card";
+        result.innerHTML =
+          '<h3 style="margin-top:0">Prüfergebnis (Demo)</h3>' +
+          "<div><strong>Name:</strong> " +
+          escapeHtml(summary.vorname) +
+          " " +
+          escapeHtml(summary.nachname) +
+          "</div>" +
+          '<div style="margin-top:6px"><strong>Alte Anschrift:</strong> ' +
+          escapeHtml(summary.alt) +
+          "</div>" +
+          '<div style="margin-top:6px"><strong>Neue Anschrift:</strong> ' +
+          escapeHtml(summary.neu) +
+          "</div>" +
+          '<div style="margin-top:6px"><strong>Einzugsdatum:</strong> ' +
+          escapeHtml(summary.einzugsdatum) +
+          "</div>" +
+          '<div style="margin-top:10px;color:#425a85">Dies ist nur eine Vorschau. Zum Absenden nutzen Sie das offizielle Bürgerportal Ihrer Gemeinde.</div>';
+        result.scrollIntoView({ behavior: "smooth", block: "center" });
+        return false;
+      }
 
-    result.style.display='block';
-    result.className='card';
-    result.innerHTML = '<h3 style="margin-top:0">Prüfergebnis (Demo)</h3>' +
-      '<div><strong>Name:</strong> ' + escapeHtml(summary.vorname) + ' ' + escapeHtml(summary.nachname) + '</div>' +
-      '<div style="margin-top:6px"><strong>Alte Anschrift:</strong> ' + escapeHtml(summary.alt) + '</div>' +
-      '<div style="margin-top:6px"><strong>Neue Anschrift:</strong> ' + escapeHtml(summary.neu) + '</div>' +
-      '<div style="margin-top:6px"><strong>Einzugsdatum:</strong> ' + escapeHtml(summary.einzugsdatum) + '</div>' +
-      '<div style="margin-top:10px;color:#425a85">Dies ist nur eine Vorschau. Zum Absenden nutzen Sie das offizielle Bürgerportal Ihrer Gemeinde.</div>';
-    result.scrollIntoView({behavior:'smooth',block:'center'});
-    return false;
-  }
-
-  function escapeHtml(s){
-    if(!s) return '';
-    return s.replace(/[&<>"\']/g, function(m){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
-    });
-  }
-</script>
-</body>
+      function escapeHtml(s) {
+        if (!s) return "";
+        return s.replace(/[&<>"\']/g, function (m) {
+          return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          }[m];
+        });
+      }
+    </script>
+  </body>
 </html>

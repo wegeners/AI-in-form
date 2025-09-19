@@ -1,402 +1,488 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>Kamera — Bürgerchat Demo</title>
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <h1>Kamera — Foto aufnehmen</h1>
-    <div style="margin-left:auto" id="status" class="meta">Bereit</div>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Kamera — Bürgerchat Demo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Kamera — Foto aufnehmen</h1>
+        <div style="margin-left: auto" id="status" class="meta">Bereit</div>
+      </header>
 
-  <div class="ui">
-    <div class="panel">
-      <label for="video">Live-Kamera (wenn unterstützt)</label>
-      <video id="video" autoplay playsinline></video>
-      <canvas id="canvas"></canvas>
+      <div class="ui">
+        <div class="panel">
+          <label for="video">Live-Kamera (wenn unterstützt)</label>
+          <video id="video" autoplay playsinline></video>
+          <canvas id="canvas"></canvas>
 
-      <div class="controls" aria-hidden="false">
-        <button id="takeBtn" class="small">Foto aufnehmen</button>
-        <label id="fileLabel" class="small secondary file-input" title="Native Kamera">
-          Native Kamera
-          <input id="fileInput" accept="image/*" capture="environment" type="file" />
-        </label>
-        <button id="retakeBtn" class="small secondary" style="display:none">Neu</button>
-        <button id="uploadBtn" class="small" style="display:none">Foto senden</button>
-        <div id="busy" style="display:none;margin-left:8px"><span class="spinner" aria-hidden="true"></span></div>
+          <div class="controls" aria-hidden="false">
+            <button id="takeBtn" class="small">Foto aufnehmen</button>
+            <label
+              id="fileLabel"
+              class="small secondary file-input"
+              title="Native Kamera"
+            >
+              Native Kamera
+              <input
+                id="fileInput"
+                accept="image/*"
+                capture="environment"
+                type="file"
+              />
+            </label>
+            <button
+              id="retakeBtn"
+              class="small secondary"
+              style="display: none"
+            >
+              Neu
+            </button>
+            <button id="uploadBtn" class="small" style="display: none">
+              Foto senden
+            </button>
+            <div id="busy" style="display: none; margin-left: 8px">
+              <span class="spinner" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <div id="questionBox">
+            <input
+              id="questionInput"
+              type="text"
+              placeholder="Frage zum Foto hinzufügen..."
+              maxlength="300"
+            />
+          </div>
+
+          <div style="margin-top: 8px" class="meta">
+            Das Foto wird zusammen mit der sessionId aus der URL an die API
+            gesendet.
+          </div>
+          <div
+            id="error"
+            class="meta error"
+            role="alert"
+            style="display: none"
+          ></div>
+        </div>
+
+        <div class="rightCol">
+          <div class="panel preview">
+            <div class="meta">Vorschau</div>
+            <img id="thumb" alt="Aufgenommenes Foto" />
+            <div id="info" class="meta">Keine Aufnahme</div>
+          </div>
+
+          <div class="panel">
+            <div class="meta">Verbindung</div>
+            <div id="apiStatus" class="status">Nicht gesendet</div>
+            <div style="margin-top: 8px" class="meta">
+              API Endpoint (änderbar im Skript):
+              <code id="apiBase">/api/upload</code>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div id="questionBox">
-        <input id="questionInput" type="text" placeholder="Frage zum Foto hinzufügen..." maxlength="300" />
-      </div>
-
-      <div style="margin-top:8px" class="meta">Das Foto wird zusammen mit der ID aus der URL an die API gesendet.</div>
-      <div id="error" class="meta error" role="alert" style="display:none"></div>
     </div>
 
-    <div class="rightCol">
-      <div class="panel preview">
-        <div class="meta">Vorschau</div>
-        <img id="thumb" alt="Aufgenommenes Foto" />
-        <div id="info" class="meta">Keine Aufnahme</div>
-      </div>
+    <script>
+      const API_BASE =
+        "https://7iikuapjf5.execute-api.eu-central-1.amazonaws.com/Prod/csadf";
+      document.getElementById("apiBase").textContent = API_BASE;
 
-      <div class="panel">
-        <div class="meta">Verbindung</div>
-        <div id="apiStatus" class="status">Nicht gesendet</div>
-        <div style="margin-top:8px" class="meta">API Endpoint (änderbar im Skript): <code id="apiBase">/api/upload</code></div>
-      </div>
-    </div>
-  </div>
-</div>
+      const MAX_BYTES = 950 * 1024;
+      const MAX_LONG_SIDE = 1600;
+      const MIN_QUALITY = 0.45;
+      const START_QUALITY = 0.92;
+      const QUALITY_STEP = 0.07;
 
-<script>
-const API_BASE = '/api/upload';
-document.getElementById('apiBase').textContent = API_BASE;
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const takeBtn = document.getElementById("takeBtn");
+      const fileInput = document.getElementById("fileInput");
+      const retakeBtn = document.getElementById("retakeBtn");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const thumb = document.getElementById("thumb");
+      const info = document.getElementById("info");
+      const statusEl = document.getElementById("status");
+      const apiStatus = document.getElementById("apiStatus");
+      const busy = document.getElementById("busy");
+      const errorEl = document.getElementById("error");
+      const questionBox = document.getElementById("questionBox");
+      const questionInput = document.getElementById("questionInput");
 
-const MAX_BYTES = 950 * 1024;
-const MAX_LONG_SIDE = 1600;
-const MIN_QUALITY = 0.45;
-const START_QUALITY = 0.92;
-const QUALITY_STEP = 0.07;
+      let stream = null;
+      let capturedBlob = null;
+      let capturedDataUrl = null;
 
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const takeBtn = document.getElementById('takeBtn');
-const fileInput = document.getElementById('fileInput');
-const retakeBtn = document.getElementById('retakeBtn');
-const uploadBtn = document.getElementById('uploadBtn');
-const thumb = document.getElementById('thumb');
-const info = document.getElementById('info');
-const statusEl = document.getElementById('status');
-const apiStatus = document.getElementById('apiStatus');
-const busy = document.getElementById('busy');
-const errorEl = document.getElementById('error');
-const questionBox = document.getElementById('questionBox');
-const questionInput = document.getElementById('questionInput');
+      // parse id from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get("sessionId") || "";
+      if (!sessionId) {
+        showError(
+          "Keine sessionId in der URL gefunden. (camera.html?sessionId={hash})"
+        );
+      }
 
-let stream = null;
-let capturedBlob = null;
-let capturedDataUrl = null;
+      function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.style.display = "block";
+        console.error(msg);
+      }
 
-// parse id from URL
-const urlParams = new URLSearchParams(window.location.search);
-const sessionId = urlParams.get('id') || '';
-if(!sessionId){
-  showError('Keine id in der URL gefunden. (camera.html?id={hash})');
-}
+      function clearError() {
+        errorEl.style.display = "none";
+        errorEl.textContent = "";
+      }
 
-function showError(msg){
-  errorEl.textContent = msg;
-  errorEl.style.display = 'block';
-  console.error(msg);
-}
-
-function clearError(){
-  errorEl.style.display = 'none';
-  errorEl.textContent = '';
-}
-
-async function startPreview(){
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    video.style.display = 'none';
-    return;
-  }
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal:1280}, height:{ideal:720} }, audio: false });
-    video.srcObject = stream;
-    video.style.display = 'block';
-    statusEl.textContent = 'Vorschau aktiv';
-  }catch(err){
-    video.style.display = 'none';
-    statusEl.textContent = 'Keine Live-Vorschau';
-  }
-}
-
-function stopStream(){
-  if(stream){
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
-}
-
-function renderQr(text){
-  qrCanvas.innerHTML = '';
-  const size = 220;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  qrCanvas.appendChild(canvas);
-  qrcodeGenerator(text, {canvas, size}); // <-- Add this line
-}
-
-async function processImageToBlob(imgOrBlob) {
-  const img = await loadImage(imgOrBlob);
-  const {width: w0, height: h0} = img;
-  let w = w0, h = h0;
-  const long = Math.max(w0, h0);
-  if (long > MAX_LONG_SIDE) {
-    const scale = MAX_LONG_SIDE / long;
-    w = Math.round(w0 * scale);
-    h = Math.round(h0 * scale);
-  }
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, w, h);
-  try {
-    const id = ctx.getImageData(0, 0, w, h);
-    const data = id.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const lum = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
-      data[i] = data[i+1] = data[i+2] = lum;
-    }
-    ctx.putImageData(id, 0, 0);
-  } catch (e) {
-    console.warn('Could not convert to grayscale (CORS?), proceeding without grayscale.', e);
-  }
-  let quality = START_QUALITY;
-  let blob = await canvasToBlob(canvas, quality);
-  while (blob.size > MAX_BYTES && quality > MIN_QUALITY) {
-    quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP);
-    blob = await canvasToBlob(canvas, quality);
-  }
-  if (blob.size > MAX_BYTES) {
-    let curW = w, curH = h;
-    while (blob.size > MAX_BYTES && (curW > 400 || curH > 400)) {
-      curW = Math.round(curW * 0.85);
-      curH = Math.round(curH * 0.85);
-      canvas.width = curW;
-      canvas.height = curH;
-      const ctx2 = canvas.getContext('2d');
-      ctx2.drawImage(img, 0, 0, curW, curH);
-      try {
-        const id2 = ctx2.getImageData(0, 0, curW, curH);
-        const data2 = id2.data;
-        for (let i = 0; i < data2.length; i += 4) {
-          const lum = Math.round(0.299 * data2[i] + 0.587 * data2[i+1] + 0.114 * data2[i+2]);
-          data2[i] = data2[i+1] = data2[i+2] = lum;
+      async function startPreview() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          video.style.display = "none";
+          return;
         }
-        ctx2.putImageData(id2, 0, 0);
-      } catch(e) { }
-      blob = await canvasToBlob(canvas, MIN_QUALITY);
-    }
-  }
-  if (blob.size > MAX_BYTES) {
-    console.warn('Image still exceeds target size after aggressive reduction:', blob.size);
-  }
-  const dataUrl = await blobToDataURL(blob);
-  return { blob, dataUrl };
-}
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+          video.srcObject = stream;
+          video.style.display = "block";
+          statusEl.textContent = "Vorschau aktiv";
+        } catch (err) {
+          video.style.display = "none";
+          statusEl.textContent = "Keine Live-Vorschau";
+        }
+      }
 
-function loadImage(input) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = e => reject(e);
-    if (input instanceof Blob) {
-      img.src = URL.createObjectURL(input);
-      img.addEventListener('load', () => URL.revokeObjectURL(img.src), {once:true});
-    } else if (typeof input === 'string' && input.startsWith('data:')) {
-      img.src = input;
-    } else if (input instanceof HTMLImageElement) {
-      resolve(input);
-    } else {
-      reject(new Error('Unsupported image input for loadImage'));
-    }
-  });
-}
+      function stopStream() {
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          stream = null;
+        }
+      }
 
-function canvasToBlob(canvasEl, quality) {
-  return new Promise((resolve) => {
-    canvasEl.toBlob(blob => resolve(blob), 'image/jpeg', quality);
-  });
-}
+      function renderQr(text) {
+        qrCanvas.innerHTML = "";
+        const size = 220;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        qrCanvas.appendChild(canvas);
+        qrcodeGenerator(text, { canvas, size }); // <-- Add this line
+      }
 
-function blobToDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = e => reject(e);
-    r.readAsDataURL(blob);
-  });
-}
+      async function processImageToBlob(imgOrBlob) {
+        const img = await loadImage(imgOrBlob);
+        const { width: w0, height: h0 } = img;
+        let w = w0,
+          h = h0;
+        const long = Math.max(w0, h0);
+        if (long > MAX_LONG_SIDE) {
+          const scale = MAX_LONG_SIDE / long;
+          w = Math.round(w0 * scale);
+          h = Math.round(h0 * scale);
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          const id = ctx.getImageData(0, 0, w, h);
+          const data = id.data;
+          for (let i = 0; i < data.length; i += 4) {
+            const lum = Math.round(
+              0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+            );
+            data[i] = data[i + 1] = data[i + 2] = lum;
+          }
+          ctx.putImageData(id, 0, 0);
+        } catch (e) {
+          console.warn(
+            "Could not convert to grayscale (CORS?), proceeding without grayscale.",
+            e
+          );
+        }
+        let quality = START_QUALITY;
+        let blob = await canvasToBlob(canvas, quality);
+        while (blob.size > MAX_BYTES && quality > MIN_QUALITY) {
+          quality = Math.max(MIN_QUALITY, quality - QUALITY_STEP);
+          blob = await canvasToBlob(canvas, quality);
+        }
+        if (blob.size > MAX_BYTES) {
+          let curW = w,
+            curH = h;
+          while (blob.size > MAX_BYTES && (curW > 400 || curH > 400)) {
+            curW = Math.round(curW * 0.85);
+            curH = Math.round(curH * 0.85);
+            canvas.width = curW;
+            canvas.height = curH;
+            const ctx2 = canvas.getContext("2d");
+            ctx2.drawImage(img, 0, 0, curW, curH);
+            try {
+              const id2 = ctx2.getImageData(0, 0, curW, curH);
+              const data2 = id2.data;
+              for (let i = 0; i < data2.length; i += 4) {
+                const lum = Math.round(
+                  0.299 * data2[i] + 0.587 * data2[i + 1] + 0.114 * data2[i + 2]
+                );
+                data2[i] = data2[i + 1] = data2[i + 2] = lum;
+              }
+              ctx2.putImageData(id2, 0, 0);
+            } catch (e) {}
+            blob = await canvasToBlob(canvas, MIN_QUALITY);
+          }
+        }
+        if (blob.size > MAX_BYTES) {
+          console.warn(
+            "Image still exceeds target size after aggressive reduction:",
+            blob.size
+          );
+        }
+        const dataUrl = await blobToDataURL(blob);
+        return { blob, dataUrl };
+      }
 
-function captureFromPreview(){
-  if(!stream){
-    showError('Keine Live-Kamera verfügbar.');
-    return;
-  }
-  const w = video.videoWidth || 1280;
-  const h = video.videoHeight || 720;
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, w, h);
-  const dataUrl = canvas.toDataURL('image/png');
-  setBusy(true);
-  processImageToBlob(dataUrl).then(({blob, dataUrl: finalDataUrl})=>{
-    setCaptured(blob, finalDataUrl);
-  }).catch(err=>{
-    showError('Fehler beim Verarbeiten des Bildes: ' + (err && err.message ? err.message : err));
-  }).finally(()=> setBusy(false));
-}
+      function loadImage(input) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = (e) => reject(e);
+          if (input instanceof Blob) {
+            img.src = URL.createObjectURL(input);
+            img.addEventListener("load", () => URL.revokeObjectURL(img.src), {
+              once: true,
+            });
+          } else if (typeof input === "string" && input.startsWith("data:")) {
+            img.src = input;
+          } else if (input instanceof HTMLImageElement) {
+            resolve(input);
+          } else {
+            reject(new Error("Unsupported image input for loadImage"));
+          }
+        });
+      }
 
-fileInput.addEventListener('change', async (e) => {
-  clearError();
-  const file = e.target.files && e.target.files[0];
-  if(!file) return;
-  setBusy(true);
-  try{
-    const { blob, dataUrl } = await processImageToBlob(file);
-    setCaptured(blob, dataUrl);
-  }catch(err){
-    showError('Fehler beim Verarbeiten der Datei: ' + (err && err.message ? err.message : err));
-  }finally{
-    setBusy(false);
-  }
-});
+      function canvasToBlob(canvasEl, quality) {
+        return new Promise((resolve) => {
+          canvasEl.toBlob((blob) => resolve(blob), "image/jpeg", quality);
+        });
+      }
 
-takeBtn.addEventListener('click', async () => {
-  clearError();
-  const isiOS = /iP(ad|hone|od)/.test(navigator.userAgent);
-  if(isiOS){
-    fileInput.click();
-    return;
-  }
-  if(stream){
-    captureFromPreview();
-  } else {
-    fileInput.click();
-  }
-});
+      function blobToDataURL(blob) {
+        return new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = (e) => reject(e);
+          r.readAsDataURL(blob);
+        });
+      }
 
-retakeBtn.addEventListener('click', () => {
-  capturedBlob = null;
-  capturedDataUrl = null;
-  thumb.src = '';
-  thumb.style.display = 'none';
-  canvas.style.display = 'none';
-  if(stream) video.style.display = 'block';
-  takeBtn.style.display = 'inline-block';
-  retakeBtn.style.display = 'none';
-  uploadBtn.style.display = 'none';
-  questionBox.style.display = 'none';
-  questionInput.value = '';
-  info.textContent = 'Keine Aufnahme';
-  apiStatus.textContent = 'Nicht gesendet';
-  statusEl.textContent = 'Bereit';
-});
+      function captureFromPreview() {
+        if (!stream) {
+          showError("Keine Live-Kamera verfügbar.");
+          return;
+        }
+        const w = video.videoWidth || 1280;
+        const h = video.videoHeight || 720;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/png");
+        setBusy(true);
+        processImageToBlob(dataUrl)
+          .then(({ blob, dataUrl: finalDataUrl }) => {
+            setCaptured(blob, finalDataUrl);
+          })
+          .catch((err) => {
+            showError(
+              "Fehler beim Verarbeiten des Bildes: " +
+                (err && err.message ? err.message : err)
+            );
+          })
+          .finally(() => setBusy(false));
+      }
 
-uploadBtn.addEventListener('click', uploadPhoto);
+      fileInput.addEventListener("change", async (e) => {
+        clearError();
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        setBusy(true);
+        try {
+          const { blob, dataUrl } = await processImageToBlob(file);
+          setCaptured(blob, dataUrl);
+        } catch (err) {
+          showError(
+            "Fehler beim Verarbeiten der Datei: " +
+              (err && err.message ? err.message : err)
+          );
+        } finally {
+          setBusy(false);
+        }
+      });
 
-function setCaptured(blob, dataUrl){
-  capturedBlob = blob;
-  capturedDataUrl = dataUrl;
-  thumb.src = capturedDataUrl;
-  thumb.style.display = 'block';
-  if(video) video.style.display = 'none';
-  canvas.style.display = 'none';
-  takeBtn.style.display = 'none';
-  retakeBtn.style.display = 'inline-block';
-  uploadBtn.style.display = 'inline-block';
-  questionBox.style.display = 'block';
-  info.textContent = 'Aufnahme bereit zum Senden ( Größe: ' + humanFileSize(blob.size) + ' )';
-  statusEl.textContent = 'Aufnahme bereit';
-  apiStatus.textContent = 'Nicht gesendet';
-}
+      takeBtn.addEventListener("click", async () => {
+        clearError();
+        const isiOS = /iP(ad|hone|od)/.test(navigator.userAgent);
+        if (isiOS) {
+          fileInput.click();
+          return;
+        }
+        if (stream) {
+          captureFromPreview();
+        } else {
+          fileInput.click();
+        }
+      });
 
-async function uploadPhoto(){
-  if(!capturedBlob){
-    showError('Kein Foto zum Senden.');
-    return;
-  }
-  if(!sessionId){
-    showError('Keine id in der URL. Senden abgebrochen.');
-    return;
-  }
-  setBusy(true);
-  clearError();
-  statusEl.textContent = 'Sende...';
-  apiStatus.textContent = 'Sende...';
+      retakeBtn.addEventListener("click", () => {
+        capturedBlob = null;
+        capturedDataUrl = null;
+        thumb.src = "";
+        thumb.style.display = "none";
+        canvas.style.display = "none";
+        if (stream) video.style.display = "block";
+        takeBtn.style.display = "inline-block";
+        retakeBtn.style.display = "none";
+        uploadBtn.style.display = "none";
+        questionBox.style.display = "none";
+        questionInput.value = "";
+        info.textContent = "Keine Aufnahme";
+        apiStatus.textContent = "Nicht gesendet";
+        statusEl.textContent = "Bereit";
+      });
 
-  try{
-    const form = new FormData();
-    form.append('photo', capturedBlob, 'photo_' + sessionId + '.jpg');
-    form.append('id', sessionId);
-    const question = questionInput.value && questionInput.value.trim();
-    if (question) {
-      form.append('question', question);
-    }
+      uploadBtn.addEventListener("click", uploadPhoto);
 
-    const resp = await fetch(API_BASE, {
-      method: 'POST',
-      body: form
-    });
+      function setCaptured(blob, dataUrl) {
+        capturedBlob = blob;
+        capturedDataUrl = dataUrl;
+        thumb.src = capturedDataUrl;
+        thumb.style.display = "block";
+        if (video) video.style.display = "none";
+        canvas.style.display = "none";
+        takeBtn.style.display = "none";
+        retakeBtn.style.display = "inline-block";
+        uploadBtn.style.display = "inline-block";
+        questionBox.style.display = "block";
+        info.textContent =
+          "Aufnahme bereit zum Senden ( Größe: " +
+          humanFileSize(blob.size) +
+          " )";
+        statusEl.textContent = "Aufnahme bereit";
+        apiStatus.textContent = "Nicht gesendet";
+      }
 
-    if(resp.ok){
-      const json = await resp.json().catch(()=>null);
-      apiStatus.textContent = 'Erfolgreich gesendet';
-      statusEl.textContent = 'Erfolg';
-      info.textContent = 'Foto und Frage gesendet' + (json && json.message ? ': ' + json.message : '.');
-      uploadBtn.style.display = 'none';
-      questionBox.style.display = 'none';
-    } else {
-      const text = await resp.text().catch(()=>'' );
-      throw new Error('Server antwortete mit ' + resp.status + (text ? (': '+text) : ''));
-    }
-  }catch(err){
-    showError('Fehler beim Senden: ' + (err && err.message ? err.message : err));
-    apiStatus.textContent = 'Fehler';
-    statusEl.textContent = 'Fehler';
-  }finally{
-    setBusy(false);
-  }
-}
+      // ...existing code...
+      async function uploadPhoto() {
+        if (!sessionId) {
+          showError("Keine sessionId in der URL. Senden abgebrochen.");
+          return;
+        }
+        setBusy(true);
+        clearError();
+        statusEl.textContent = "Sende...";
+        apiStatus.textContent = "Sende...";
 
-function setBusy(on){
-  busy.style.display = on ? 'inline-block' : 'none';
-  takeBtn.disabled = on;
-  uploadBtn.disabled = on;
-  retakeBtn.disabled = on;
-  fileInput.disabled = on;
-  questionInput.disabled = on;
-}
+        try {
+          const payload = {
+            sessionId: sessionId,
+          };
+          const question = questionInput.value && questionInput.value.trim();
+          if (question) {
+            payload.userQuestion = question;
+          }
 
-function humanFileSize(bytes) {
-  const i = bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024));
-  return (bytes / Math.pow(1024, i)).toFixed(2) * 1 + ' ' + ['B','kB','MB','GB'][i];
-}
+          const resp = await fetch(API_BASE, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
 
-function dataURLToBlob(dataURL){
-  const parts = dataURL.split(',');
-  const meta = parts[0];
-  const base64 = parts[1];
-  const mime = meta.match(/:(.*?);/)[1];
-  const binary = atob(base64);
-  const len = binary.length;
-  const u8 = new Uint8Array(len);
-  for(let i=0;i<len;i++) u8[i] = binary.charCodeAt(i);
-  return new Blob([u8], {type:mime});
-}
+          if (resp.ok) {
+            const json = await resp.json().catch(() => null);
+            apiStatus.textContent = "Erfolgreich gesendet";
+            statusEl.textContent = "Erfolg";
+            info.textContent =
+              "Frage gesendet" +
+              (json && json.message ? ": " + json.message : ".");
+            uploadBtn.style.display = "none";
+            questionBox.style.display = "none";
+          } else {
+            const text = await resp.text().catch(() => "");
+            throw new Error(
+              "Server antwortete mit " + resp.status + (text ? ": " + text : "")
+            );
+          }
+        } catch (err) {
+          showError(
+            "Fehler beim Senden: " + (err && err.message ? err.message : err)
+          );
+          apiStatus.textContent = "Fehler";
+          statusEl.textContent = "Fehler";
+        } finally {
+          setBusy(false);
+        }
+      }
+      // ...existing code...
 
-(async function init(){
-  await startPreview();
-  if(!stream){
-    statusEl.textContent = 'Native Kamera wird verwendet';
-  }
-  document.addEventListener('visibilitychange', async ()=>{
-    if(document.visibilityState === 'visible' && !stream){
-      await startPreview();
-    }
-  });
-})();
+      function setBusy(on) {
+        busy.style.display = on ? "inline-block" : "none";
+        takeBtn.disabled = on;
+        uploadBtn.disabled = on;
+        retakeBtn.disabled = on;
+        fileInput.disabled = on;
+        questionInput.disabled = on;
+      }
 
-window.addEventListener('pagehide', ()=> stopStream());
-</script>
-</body>
+      function humanFileSize(bytes) {
+        const i =
+          bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024));
+        return (
+          (bytes / Math.pow(1024, i)).toFixed(2) * 1 +
+          " " +
+          ["B", "kB", "MB", "GB"][i]
+        );
+      }
+
+      function dataURLToBlob(dataURL) {
+        const parts = dataURL.split(",");
+        const meta = parts[0];
+        const base64 = parts[1];
+        const mime = meta.match(/:(.*?);/)[1];
+        const binary = atob(base64);
+        const len = binary.length;
+        const u8 = new Uint8Array(len);
+        for (let i = 0; i < len; i++) u8[i] = binary.charCodeAt(i);
+        return new Blob([u8], { type: mime });
+      }
+
+      (async function init() {
+        await startPreview();
+        if (!stream) {
+          statusEl.textContent = "Native Kamera wird verwendet";
+        }
+        document.addEventListener("visibilitychange", async () => {
+          if (document.visibilityState === "visible" && !stream) {
+            await startPreview();
+          }
+        });
+      })();
+
+      window.addEventListener("pagehide", () => stopStream());
+    </script>
+  </body>
 </html>
