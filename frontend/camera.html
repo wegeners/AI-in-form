@@ -401,7 +401,7 @@
           };
           const question = questionInput.value && questionInput.value.trim();
           if (question) {
-            payload.question = question;
+            payload.userQuestion = question;
           }
 
           const resp = await fetch(API_BASE, {
