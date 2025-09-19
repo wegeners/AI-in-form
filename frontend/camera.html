@@ -93,8 +93,17 @@
     </div>
 
     <script>
-      const API_BASE =
-        "https://7iikuapjf5.execute-api.eu-central-1.amazonaws.com/Prod/csadf";
+      let API_BASE =
+        "https://7iikuapjf5.execute-api.eu-central-1.amazonaws.com/Prod";
+      try {
+        if (
+          location.protocol === "file:" ||
+          location.hostname === "localhost" ||
+          location.hostname.startsWith("127.")
+        ) {
+          API_BASE = "/api/upload";
+        }
+      } catch (e) {}
       document.getElementById("apiBase").textContent = API_BASE;
 
       const MAX_BYTES = 950 * 1024;
@@ -396,19 +405,19 @@
         apiStatus.textContent = "Sende...";
 
         try {
+          // Prepare JSON payload expected by the API/StateMachine
+          const question = questionInput.value && questionInput.value.trim();
+
           const payload = {
             sessionId: sessionId,
           };
-          const question = questionInput.value && questionInput.value.trim();
-          if (question) {
-            payload.userQuestion = question;
-          }
+          if (question) payload.userQuestion = question;
 
-          const resp = await fetch(API_BASE, {
+          const base = API_BASE.replace(/\/$/, "");
+          const url = base + "/" + encodeURIComponent(sessionId);
+          const resp = await fetch(url, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
 
@@ -447,7 +456,6 @@
         fileInput.disabled = on;
         questionInput.disabled = on;
       }
-
       function humanFileSize(bytes) {
         const i =
           bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024));
