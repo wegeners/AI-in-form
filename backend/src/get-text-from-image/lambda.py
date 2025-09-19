@@ -15,7 +15,7 @@ def handler(event, context):
         write_to_table(None, None, err)
         return {"error": err}
 
-    session_id = event.get("session_id")
+    session_id = event["Payload"]["sessionId"]
     if not session_id:
         err = "2002 session id is missing."
         write_to_table(None, None, err)
@@ -60,7 +60,7 @@ def handler(event, context):
             )
     except Exception as e:
         err = f"2006 Request_or_Read_Failed: {e}"
-        write_to_table(None, session_id, err)
+        write_to_table(None, session_id, "") # use empty string here so the next step can continue
         return {"error": err}
     # remove file from path
     #os.remove(file_path)
@@ -111,10 +111,7 @@ def write_to_table(text, session_id, error):
         return  
 
     table_name = (
-        os.environ.get("OCR_RESULTS_TABLE")
-        or os.environ.get("CQPROGRESSQUESTIONS_TABLE_NAME")
-        or os.environ.get("TABLE_NAME")
-        or os.environ.get("Table_NAME")
+        os.environ.get("FORMSESSION_TABLE_NAME")
     )
     if not table_name:
         return  
@@ -123,8 +120,8 @@ def write_to_table(text, session_id, error):
         ddb = boto3.resource("dynamodb")
         table = ddb.Table(table_name)
         item = {
-            "session_id": session_id,
-            STEP_ATTRIBUTE_NAME: 2,
+            "sessionId": session_id,
+            STEP_ATTRIBUTE_NAME: 1,
             "value": (error if error else (text or "")),
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "completed": bool(error),
