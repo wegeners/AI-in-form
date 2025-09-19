@@ -78,7 +78,8 @@ Erklärungsfrage (Englisch):
         "sessionId": session_id
     }
 
-    return {
-        'statusCode': 200,
-        'body': json.dumps(response_json)
-    }
+    return event
+    # return {
+    #     'statusCode': 200,
+    #     'body': json.dumps(response_json)
+    # }

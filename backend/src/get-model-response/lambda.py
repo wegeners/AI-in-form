@@ -17,7 +17,7 @@ def get_openrouter_response(messages):
         },
         json={
             "model": "meta-llama/llama-3.3-70b-instruct:free",
-            "messages": messages,
+            "messages": [messages]
         },
     )
     response.raise_for_status()
@@ -31,22 +31,23 @@ def handler(event, context):
     print(event)
 
     try:
-        body = event.get("body", "{}")
-        sessionID = body.get("sessionID")
-        messages = body.get("ocrValue", [])
-        userQuestion = body.get("userQuestion")
+        text = str(event["text"])
+        question = str(event["userQuestion"])
+        session_id = event["sessionId"]
 
 
 
-        if not userQuestion:
+        if not question:
             return {
                 "statusCode": 400,
                 "body": json.dumps({"error": "Missing 'userQuestion' in request body"}),
             }
 
-        messages.append({"role": "user", "content": userQuestion})
-
-        api_response = get_openrouter_response(messages)
+        #messages.append({"role": "user", "content": question})
+        model_payload = {"role": "user", "content": text +" "+ question}
+        api_response = get_openrouter_response(model_payload)
+        print("this is the api response")
+        print(api_response)
 
         table_name = os.environ.get("FORMSESSION_TABLE_NAME")
         if not table_name:
@@ -57,8 +58,8 @@ def handler(event, context):
 
         table.put_item(
             Item={
-                "sessionId": sessionID,
-                "step": 3,
+                "sessionId": session_id,
+                "step": 2,
                 "value": api_response,
                 "timestamp": datetime.utcnow().isoformat(),
                 "completed": True,

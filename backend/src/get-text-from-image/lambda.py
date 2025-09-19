@@ -5,7 +5,7 @@ import boto3
 from botocore.exceptions import ClientError
 from datetime import datetime, timezone
 
-STEP_ATTRIBUTE_NAME = "step"  
+STEP_ATTRIBUTE_NAME = "step"
 
 
 def handler(event, context):
@@ -16,6 +16,7 @@ def handler(event, context):
         return {"error": err}
 
     session_id = event["Payload"]["sessionId"]
+    user_question = event["Payload"]["userQuestion"]
     if not session_id:
         err = "2002 session id is missing."
         write_to_table(None, None, err)
@@ -40,13 +41,11 @@ def handler(event, context):
         "isOverlayRequired": "false",
     }
 
-
     s3 = boto3.client("s3")
 
     # Download to /tmp (Lambda’s writable dir)
     local_path = "/tmp/myfile.jpg"
     s3.download_file(bucket, file_path, local_path)
-
 
     # Call OCR.space
     try:
@@ -60,10 +59,10 @@ def handler(event, context):
             )
     except Exception as e:
         err = f"2006 Request_or_Read_Failed: {e}"
-        write_to_table(None, session_id, "") # use empty string here so the next step can continue
+        write_to_table(None, session_id, "")  # use empty string here so the next step can continue
         return {"error": err}
     # remove file from path
-    #os.remove(file_path)
+    # os.remove(file_path)
     s3.delete_object(Bucket=bucket, Key=file_path)
 
     # HTTP / JSON handling
@@ -79,7 +78,6 @@ def handler(event, context):
         err = "2008 OCR_provider_error"
         write_to_table(None, session_id, err)
         return {"error": err}
-
 
     try:
         results = data.get("ParsedResults", [])
@@ -104,17 +102,18 @@ def handler(event, context):
     # On success, write value=text, fin=False
     write_to_table(text, session_id, None)
 
-    return {"text": text}
+    return {"text": text, "sessionId": session_id, "userQuestion": user_question}
+
 
 def write_to_table(text, session_id, error):
     if not session_id:
-        return  
+        return
 
     table_name = (
         os.environ.get("FORMSESSION_TABLE_NAME")
     )
     if not table_name:
-        return  
+        return
 
     try:
         ddb = boto3.resource("dynamodb")

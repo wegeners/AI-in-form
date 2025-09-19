@@ -387,7 +387,7 @@ Resources:
         Variables:
           FORMSESSION_TABLE_NAME: !Ref FormSession
           FORMSESSION_TABLE_ARN: !GetAtt FormSession.Arn
-          OPENROUTER_API_KEY: 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
+          OPENROUTER_API_KEY: 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
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref FormSession
